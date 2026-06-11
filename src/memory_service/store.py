@@ -114,7 +114,120 @@ def get_turn(turn_id: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+# ---------- atomic turn write (turn + memories + enrichment in one tx) ----------
+
+def write_turn(
+    *,
+    session_id: str,
+    user_id: str | None,
+    ts: str,
+    messages: list[dict[str, Any]],
+    metadata: dict[str, Any] | None,
+    summary: str,
+    turn_embedding: bytes | None,
+    memory_ops: list[dict[str, Any]],
+) -> tuple[str, int]:
+    """Apply a fully-extracted turn in a single transaction.
+
+    The LLM extraction happens *before* this call (lock-free); here we only
+    do fast SQL. Atomicity is the point: a kill mid-write rolls everything
+    back — the eval's restart-mid-write probe can never observe a turn
+    without its memories or vice versa. memory_ops entries carry the
+    ExtractedMemory fields plus a precomputed "embedding" blob.
+    """
+    turn_id = new_id("turn")
+    owner = owner_key(user_id, session_id)
+    fts_text = " \n".join(str(m.get("content", "")) for m in messages)
+    applied = 0
+    with db.tx() as conn:
+        conn.execute(
+            "INSERT INTO turns (id, session_id, user_id, owner, ts, messages_json,"
+            " metadata_json, summary, embedding, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (
+                turn_id, session_id, user_id, owner, ts,
+                json.dumps(messages, ensure_ascii=False),
+                json.dumps(metadata or {}, ensure_ascii=False),
+                summary, turn_embedding, _now(),
+            ),
+        )
+        conn.execute("INSERT INTO turns_fts (doc_id, text) VALUES (?,?)", (turn_id, fts_text))
+        if summary:
+            conn.execute("INSERT INTO turns_fts (doc_id, text) VALUES (?,?)", (turn_id, summary))
+        for op in memory_ops:
+            try:
+                if op["action"] == "reinforce" and op.get("supersedes_id"):
+                    conn.execute(
+                        "UPDATE memories SET updated_at=?, confidence=? WHERE id=? AND owner=?",
+                        (_now(), op["confidence"], op["supersedes_id"], owner),
+                    )
+                    continue
+                _insert_memory_conn(
+                    conn,
+                    owner=owner,
+                    user_id=user_id,
+                    type_=op["type"],
+                    key=op["key"],
+                    value=op["value"],
+                    confidence=op["confidence"],
+                    entities=op.get("entities", []),
+                    source_session=session_id,
+                    source_turn=turn_id,
+                    supersedes_id=op.get("supersedes_id"),
+                    embedding=op.get("embedding"),
+                )
+                applied += 1
+            except Exception:
+                log.exception("failed to apply extracted memory %s", op.get("key"))
+    return turn_id, applied
+
+
 # ---------- memories ----------
+
+def _insert_memory_conn(
+    conn: Any,
+    *,
+    owner: str,
+    user_id: str | None,
+    type_: str,
+    key: str,
+    value: str,
+    confidence: float,
+    entities: list[str],
+    source_session: str | None,
+    source_turn: str | None,
+    supersedes_id: str | None,
+    embedding: bytes | None,
+) -> str:
+    mem_id = new_id("mem")
+    now = _now()
+    if supersedes_id:
+        row = conn.execute(
+            "SELECT id FROM memories WHERE id=? AND owner=?", (supersedes_id, owner)
+        ).fetchone()
+        if row is None:
+            log.warning("supersedes target %s not found for owner %s", supersedes_id, owner)
+            supersedes_id = None
+        else:
+            conn.execute(
+                "UPDATE memories SET active=0, superseded_by=?, updated_at=? WHERE id=?",
+                (mem_id, now, supersedes_id),
+            )
+    conn.execute(
+        "INSERT INTO memories (id, owner, user_id, type, key, value, confidence,"
+        " entities_json, source_session, source_turn, created_at, updated_at,"
+        " supersedes, active, embedding) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)",
+        (
+            mem_id, owner, user_id, type_, key, value, confidence,
+            json.dumps(sorted(set(e.lower() for e in entities)), ensure_ascii=False),
+            source_session, source_turn, now, now, supersedes_id, embedding,
+        ),
+    )
+    conn.execute(
+        "INSERT INTO memories_fts (doc_id, text) VALUES (?,?)",
+        (mem_id, f"{key} {value} {' '.join(entities)}"),
+    )
+    return mem_id
+
 
 def insert_memory(
     *,
@@ -130,36 +243,12 @@ def insert_memory(
     supersedes_id: str | None = None,
     embedding: bytes | None = None,
 ) -> str:
-    mem_id = new_id("mem")
-    now = _now()
     with db.tx() as conn:
-        if supersedes_id:
-            row = conn.execute(
-                "SELECT id FROM memories WHERE id=? AND owner=?", (supersedes_id, owner)
-            ).fetchone()
-            if row is None:
-                log.warning("supersedes target %s not found for owner %s", supersedes_id, owner)
-                supersedes_id = None
-            else:
-                conn.execute(
-                    "UPDATE memories SET active=0, superseded_by=?, updated_at=? WHERE id=?",
-                    (mem_id, now, supersedes_id),
-                )
-        conn.execute(
-            "INSERT INTO memories (id, owner, user_id, type, key, value, confidence,"
-            " entities_json, source_session, source_turn, created_at, updated_at,"
-            " supersedes, active, embedding) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)",
-            (
-                mem_id, owner, user_id, type_, key, value, confidence,
-                json.dumps(sorted(set(e.lower() for e in entities)), ensure_ascii=False),
-                source_session, source_turn, now, now, supersedes_id, embedding,
-            ),
+        return _insert_memory_conn(
+            conn, owner=owner, user_id=user_id, type_=type_, key=key, value=value,
+            confidence=confidence, entities=entities, source_session=source_session,
+            source_turn=source_turn, supersedes_id=supersedes_id, embedding=embedding,
         )
-        conn.execute(
-            "INSERT INTO memories_fts (doc_id, text) VALUES (?,?)",
-            (mem_id, f"{key} {value} {' '.join(entities)}"),
-        )
-    return mem_id
 
 
 def touch_memory(mem_id: str, *, confidence: float | None = None) -> None:
