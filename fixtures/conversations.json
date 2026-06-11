@@ -1,0 +1,351 @@
+{
+  "description": "Self-eval fixture: 5 scripted multi-session users exercising fact evolution, multi-hop, implicit facts, corrections, opinion arcs, preferences, and noise resistance. Ingested in order by scripts/selfeval.py.",
+  "conversations": [
+    {
+      "user_id": "fx-maya",
+      "comment": "Fact evolution (job change), multi-hop (dog name <-> city), implicit fact (pet from 'walking Biscuit')",
+      "sessions": [
+        {
+          "session_id": "fx-maya-s1",
+          "turns": [
+            {
+              "timestamp": "2025-01-10T09:00:00Z",
+              "messages": [
+                { "role": "user", "content": "Hey! Quick question about TypeScript config. For context I'm a backend engineer at Stripe, we use tsconfig strict mode everywhere." },
+                { "role": "assistant", "content": "Happy to help! Strict mode at Stripe makes sense. What's the question?" }
+              ]
+            },
+            {
+              "timestamp": "2025-01-10T09:05:00Z",
+              "messages": [
+                { "role": "user", "content": "Sorry, got distracted — was walking Biscuit this morning and he chewed through his leash, had to improvise. Anyway: how do I get noImplicitAny to play nice with legacy JS imports?" },
+                { "role": "assistant", "content": "Ha, hope Biscuit is okay! For legacy JS imports you can use allowJs with checkJs disabled, or add declaration stubs." }
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "fx-maya-s2",
+          "turns": [
+            {
+              "timestamp": "2025-02-20T14:00:00Z",
+              "messages": [
+                { "role": "user", "content": "I'm planning a move soon and weighing neighborhoods. We ended up choosing Denver — signing the lease next week. Any tips for finding dog-friendly apartments?" },
+                { "role": "assistant", "content": "Congrats on Denver! For dog-friendly places, check the pet deposit terms and nearby parks — Denver has great ones like Cheesman Park." }
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "fx-maya-s3",
+          "turns": [
+            {
+              "timestamp": "2025-04-05T11:00:00Z",
+              "messages": [
+                { "role": "user", "content": "Big news — I just started at Notion this week as a product manager! Switching from engineering to PM has been a whirlwind." },
+                { "role": "assistant", "content": "Congratulations on the new role at Notion! The engineer-to-PM transition is a big one. How's the first week going?" },
+                { "role": "user", "content": "Good so far. Biscuit approves of the home office setup too." },
+                { "role": "assistant", "content": "Glad to hear it — sounds like the whole household is settling in." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "user_id": "fx-jonas",
+      "comment": "Correction ('actually, not X — Y'), allergy/dietary facts, implicit family fact",
+      "sessions": [
+        {
+          "session_id": "fx-jonas-s1",
+          "turns": [
+            {
+              "timestamp": "2025-03-01T18:30:00Z",
+              "messages": [
+                { "role": "user", "content": "Can you help me plan a dinner party menu? I'm allergic to peanuts so nothing with those. Six guests." },
+                { "role": "assistant", "content": "Of course! A peanut-free menu for six. Any cuisine preferences?" },
+                { "role": "user", "content": "Wait, sorry — I misspoke. Not peanuts, it's shellfish I'm allergic to. Peanuts are fine. Thai food is actually my favorite." },
+                { "role": "assistant", "content": "Got it — shellfish allergy, peanuts fine, and Thai is your favorite. Pad thai with chicken and peanut sauce works great then." }
+              ]
+            },
+            {
+              "timestamp": "2025-03-01T18:45:00Z",
+              "messages": [
+                { "role": "user", "content": "My daughter's violin recital is the same evening, so dinner has to start late, around 8pm." },
+                { "role": "assistant", "content": "Noted — an 8pm start after the recital. You could prep most dishes ahead." }
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "fx-jonas-s2",
+          "turns": [
+            {
+              "timestamp": "2025-03-15T10:00:00Z",
+              "messages": [
+                { "role": "user", "content": "The dinner went great, thanks. Different topic: I'm a freelance photographer based in Lisbon and I need help writing a client contract for a wedding shoot." },
+                { "role": "assistant", "content": "Glad it went well! For a wedding photography contract in Portugal, you'll want deliverables, usage rights, and a cancellation clause." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "user_id": "fx-priya",
+      "comment": "Opinion arc on TypeScript across three sessions — not a clean overwrite, an evolving stance",
+      "sessions": [
+        {
+          "session_id": "fx-priya-s1",
+          "turns": [
+            {
+              "timestamp": "2025-01-05T12:00:00Z",
+              "messages": [
+                { "role": "user", "content": "I absolutely love TypeScript. The type system has saved me from so many bugs. Migrating our whole startup's codebase to it." },
+                { "role": "assistant", "content": "TypeScript's type system is great for catching bugs early. Good luck with the migration!" }
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "fx-priya-s2",
+          "turns": [
+            {
+              "timestamp": "2025-03-12T16:20:00Z",
+              "messages": [
+                { "role": "user", "content": "Ugh, TypeScript generics are driving me crazy today. Conditional types with infer are unreadable. Starting to have mixed feelings about this language." },
+                { "role": "assistant", "content": "Deeply nested conditional types can get gnarly. Sometimes simpler overloads are more maintainable." }
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "fx-priya-s3",
+          "turns": [
+            {
+              "timestamp": "2025-05-20T09:30:00Z",
+              "messages": [
+                { "role": "user", "content": "I've landed on a take: TypeScript is fine for big team projects, but for quick scripts I just use Python now. Right tool for the job." },
+                { "role": "assistant", "content": "That's a pragmatic split — static types where coordination matters, Python where iteration speed wins." },
+                { "role": "user", "content": "Exactly. By the way I prefer really short answers — bullet points over paragraphs, always." },
+                { "role": "assistant", "content": "- Noted\n- Short answers\n- Bullets from here on" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "user_id": "fx-omar",
+      "comment": "Location evolution (NYC -> Berlin, mirrors their smoke test), tool-call turn, vegetarian preference",
+      "sessions": [
+        {
+          "session_id": "fx-omar-s1",
+          "turns": [
+            {
+              "timestamp": "2025-02-01T08:00:00Z",
+              "messages": [
+                { "role": "user", "content": "What are good vegetarian meal-prep ideas? I live in NYC and my tiny kitchen has basically one burner." },
+                { "role": "assistant", "content": "One-burner NYC kitchen, vegetarian — sheet-pan substitutes are out, but one-pot grain bowls and overnight oats work great." }
+              ]
+            },
+            {
+              "timestamp": "2025-02-01T08:10:00Z",
+              "messages": [
+                { "role": "user", "content": "Can you check the weather for my run tomorrow?" },
+                { "role": "tool", "name": "get_weather", "content": "{\"location\": \"New York, NY\", \"tomorrow\": {\"high_f\": 38, \"conditions\": \"light snow\"}}" },
+                { "role": "assistant", "content": "Tomorrow in New York: light snow, high of 38°F — maybe an indoor workout instead." }
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "fx-omar-s2",
+          "turns": [
+            {
+              "timestamp": "2025-06-10T19:00:00Z",
+              "messages": [
+                { "role": "user", "content": "I just moved to Berlin from NYC last month for a new job at a music tech startup. Loving it so far. Where do I find good vegetarian döner?" },
+                { "role": "assistant", "content": "Welcome to Berlin! For vegetarian döner, Vöner in Friedrichshain is a classic." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "user_id": "fx-lena",
+      "comment": "Single-session user with sparse facts; main source of noise-resistance probes",
+      "sessions": [
+        {
+          "session_id": "fx-lena-s1",
+          "turns": [
+            {
+              "timestamp": "2025-04-22T13:00:00Z",
+              "messages": [
+                { "role": "user", "content": "Help me debug a React dashboard that re-renders way too often. I think it's a context provider issue." },
+                { "role": "assistant", "content": "Excessive re-renders from context are common — every consumer re-renders on any value change. Consider splitting contexts or memoizing the value." },
+                { "role": "user", "content": "That fixed it, thanks. I'm prepping for a system design interview at a big tech company next week, so I'll be back with more questions." },
+                { "role": "assistant", "content": "Nice work! Good luck with the interview prep — happy to run mock questions anytime." }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "probes": [
+    {
+      "id": "p01", "category": "fact_evolution",
+      "query": "Where does the user work right now?",
+      "user_id": "fx-maya", "session_id": "probe-s1",
+      "expect_any": ["Notion"],
+      "expect_history_any": ["Stripe"],
+      "comment": "Current employer must be Notion; Stripe should survive only as history"
+    },
+    {
+      "id": "p02", "category": "fact_evolution",
+      "query": "What is the user's job title or role?",
+      "user_id": "fx-maya", "session_id": "probe-s1",
+      "expect_any": ["product manager", "PM"]
+    },
+    {
+      "id": "p03", "category": "multi_hop",
+      "query": "What city does the user with the dog named Biscuit live in?",
+      "user_id": "fx-maya", "session_id": "probe-s2",
+      "expect_any": ["Denver"]
+    },
+    {
+      "id": "p04", "category": "keyword",
+      "query": "What's their dog's name?",
+      "user_id": "fx-maya", "session_id": "probe-s2",
+      "expect_any": ["Biscuit"]
+    },
+    {
+      "id": "p05", "category": "implicit",
+      "query": "Does the user have any pets?",
+      "user_id": "fx-maya", "session_id": "probe-s2",
+      "expect_any": ["dog", "Biscuit"]
+    },
+    {
+      "id": "p06", "category": "fact_evolution",
+      "query": "Where does the user live?",
+      "user_id": "fx-maya", "session_id": "probe-s3",
+      "expect_any": ["Denver"]
+    },
+    {
+      "id": "p07", "category": "correction",
+      "query": "What food allergies does the user have?",
+      "user_id": "fx-jonas", "session_id": "probe-s1",
+      "expect_any": ["shellfish"],
+      "expect_absent_as_current": ["allergic to peanuts"],
+      "comment": "Peanut allergy was corrected to shellfish; current context must not assert peanut allergy"
+    },
+    {
+      "id": "p08", "category": "preference",
+      "query": "What kind of food does the user like?",
+      "user_id": "fx-jonas", "session_id": "probe-s1",
+      "expect_any": ["Thai"]
+    },
+    {
+      "id": "p09", "category": "implicit",
+      "query": "Does the user have children?",
+      "user_id": "fx-jonas", "session_id": "probe-s2",
+      "expect_any": ["daughter"]
+    },
+    {
+      "id": "p10", "category": "recall",
+      "query": "What does the user do for a living and where are they based?",
+      "user_id": "fx-jonas", "session_id": "probe-s2",
+      "expect_any": ["photographer"],
+      "expect_all": ["Lisbon"]
+    },
+    {
+      "id": "p11", "category": "opinion_arc",
+      "query": "How does the user feel about TypeScript?",
+      "user_id": "fx-priya", "session_id": "probe-s1",
+      "expect_any": ["big team projects", "big projects", "Python for", "scripts"],
+      "comment": "Should reflect the settled nuanced stance, not just 'loves TypeScript'"
+    },
+    {
+      "id": "p12", "category": "preference",
+      "query": "How should I format my answers for this user?",
+      "user_id": "fx-priya", "session_id": "probe-s2",
+      "expect_any": ["short", "bullet"]
+    },
+    {
+      "id": "p13", "category": "fact_evolution",
+      "query": "Where does this user live?",
+      "user_id": "fx-omar", "session_id": "probe-s1",
+      "expect_any": ["Berlin"],
+      "expect_history_any": ["NYC", "New York"]
+    },
+    {
+      "id": "p14", "category": "preference",
+      "query": "Any dietary preferences I should know about for restaurant suggestions?",
+      "user_id": "fx-omar", "session_id": "probe-s1",
+      "expect_any": ["vegetarian"]
+    },
+    {
+      "id": "p15", "category": "recall",
+      "query": "What industry does the user work in?",
+      "user_id": "fx-omar", "session_id": "probe-s2",
+      "expect_any": ["music"]
+    },
+    {
+      "id": "p16", "category": "recall",
+      "query": "What was the user debugging recently?",
+      "user_id": "fx-lena", "session_id": "probe-s1",
+      "expect_any": ["React", "re-render", "dashboard"]
+    },
+    {
+      "id": "p17", "category": "recall",
+      "query": "What is the user preparing for?",
+      "user_id": "fx-lena", "session_id": "probe-s1",
+      "expect_any": ["system design", "interview"]
+    },
+    {
+      "id": "p18", "category": "noise",
+      "query": "What's the user's favorite soccer team?",
+      "user_id": "fx-lena", "session_id": "probe-s1",
+      "expect_empty": true
+    },
+    {
+      "id": "p19", "category": "noise",
+      "query": "What car does the user drive?",
+      "user_id": "fx-maya", "session_id": "probe-s4",
+      "expect_empty": true
+    },
+    {
+      "id": "p20", "category": "noise",
+      "query": "Tell me about the user's wedding plans.",
+      "user_id": "fx-priya", "session_id": "probe-s3",
+      "expect_empty": true
+    },
+    {
+      "id": "p21", "category": "cold_session",
+      "query": "What do you know about this user?",
+      "user_id": "fx-ghost-user", "session_id": "probe-ghost",
+      "expect_empty": true,
+      "comment": "Unknown user: 200 with empty context, never an error"
+    },
+    {
+      "id": "p22", "category": "keyword",
+      "query": "When is the violin recital?",
+      "user_id": "fx-jonas", "session_id": "probe-s3",
+      "expect_any": ["recital", "daughter"]
+    },
+    {
+      "id": "p23", "category": "multi_hop",
+      "query": "Which city did the photographer user move his dinner party planning expertise to?",
+      "user_id": "fx-jonas", "session_id": "probe-s3",
+      "expect_any": ["Lisbon"]
+    },
+    {
+      "id": "p24", "category": "recall",
+      "query": "What pet-related mishap did the user mention?",
+      "user_id": "fx-maya", "session_id": "probe-s5",
+      "expect_any": ["leash", "chewed"]
+    }
+  ]
+}
