@@ -159,6 +159,40 @@ test → compose down/up persistence), README.
 
 ---
 
+## v0.6 — Adversarial-review hardening
+
+**What changed:** After v0.5 I ran an adversarial review pass over the
+submission (multiple independent reviewers checking contract compliance,
+code correctness, eval-harness behavior, docs accuracy, and originality
+exposure) and fixed what survived verification:
+
+1. **Session→user owner resolution on reads.** A `/recall` carrying
+   `user_id: null` but a `session_id` whose turns were written under a user
+   previously resolved to the (empty) anonymous scope. Now it resolves to
+   that user — the caller that knows the session was the one writing to it.
+   Documented as a deliberate bearer-capability decision in README §4;
+   anonymous-session isolation is unchanged (regression-tested).
+2. **Atomic `/turns`.** Extraction + embedding now run lock-free, then the
+   turn, its memories, and supersession flips apply in a *single*
+   transaction. Restart-mid-write can no longer observe a turn without its
+   memories or a half-flipped chain, and `/recall` is never blocked behind a
+   multi-second LLM call holding the connection lock. Dead single-step write
+   paths removed.
+3. **Docs drift caught by review:** the README architecture diagram and
+   failure-mode table still described the pre-atomic write order — rewritten
+   to match the code. Added: the gate floors are calibrated for
+   bge-small-en-v1.5 specifically (swapping `MEMORY_EMBEDDING_MODEL` requires
+   re-calibration — method documented), and a prior-art section locating the
+   design against mem0/Zep/Hindsight per the originality rule.
+
+**Result:** pytest 30/30; self-eval re-run after the changes: **24/24** with
+the same latency profile. No retrieval-quality change expected or observed —
+this round was correctness, scoping, and review-readiness.
+
+**Next:** below.
+
+---
+
 ## Where I'd go next (not built)
 
 - **Re-fit the gate floors on a bigger probe set** — 24 probes is enough to
