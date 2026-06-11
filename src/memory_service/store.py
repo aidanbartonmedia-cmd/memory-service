@@ -54,52 +54,6 @@ def new_id(prefix: str) -> str:
 
 # ---------- turns ----------
 
-def add_turn(
-    *,
-    session_id: str,
-    user_id: str | None,
-    ts: str,
-    messages: list[dict[str, Any]],
-    metadata: dict[str, Any] | None,
-) -> str:
-    turn_id = new_id("turn")
-    owner = owner_key(user_id, session_id)
-    fts_text = " \n".join(str(m.get("content", "")) for m in messages)
-    with db.tx() as conn:
-        conn.execute(
-            "INSERT INTO turns (id, session_id, user_id, owner, ts, messages_json,"
-            " metadata_json, created_at) VALUES (?,?,?,?,?,?,?,?)",
-            (
-                turn_id,
-                session_id,
-                user_id,
-                owner,
-                ts,
-                json.dumps(messages, ensure_ascii=False),
-                json.dumps(metadata or {}, ensure_ascii=False),
-                _now(),
-            ),
-        )
-        conn.execute(
-            "INSERT INTO turns_fts (doc_id, text) VALUES (?,?)", (turn_id, fts_text)
-        )
-    return turn_id
-
-
-def enrich_turn(turn_id: str, *, summary: str, embedding: bytes | None) -> None:
-    with db.tx() as conn:
-        conn.execute(
-            "UPDATE turns SET summary=?, embedding=? WHERE id=?",
-            (summary, embedding, turn_id),
-        )
-        if summary:
-            # The summary is a much better retrieval target than raw chat text;
-            # index both (raw text already inserted at add_turn).
-            conn.execute(
-                "INSERT INTO turns_fts (doc_id, text) VALUES (?,?)", (turn_id, summary)
-            )
-
-
 def get_turns(owner: str, limit: int = 50) -> list[dict[str, Any]]:
     with db.tx() as conn:
         rows = conn.execute(
@@ -249,18 +203,6 @@ def insert_memory(
             confidence=confidence, entities=entities, source_session=source_session,
             source_turn=source_turn, supersedes_id=supersedes_id, embedding=embedding,
         )
-
-
-def touch_memory(mem_id: str, *, confidence: float | None = None) -> None:
-    """Re-affirmed memory: bump updated_at (and optionally confidence)."""
-    with db.tx() as conn:
-        if confidence is not None:
-            conn.execute(
-                "UPDATE memories SET updated_at=?, confidence=? WHERE id=?",
-                (_now(), confidence, mem_id),
-            )
-        else:
-            conn.execute("UPDATE memories SET updated_at=? WHERE id=?", (_now(), mem_id))
 
 
 def get_memories(owner: str, *, active_only: bool = False) -> list[dict[str, Any]]:
