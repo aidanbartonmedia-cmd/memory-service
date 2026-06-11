@@ -1,0 +1,176 @@
+# CHANGELOG
+
+Every entry below was measured with the same loop: `scripts/selfeval.py`
+ingests the 5 scripted conversations in `fixtures/conversations.json` (14
+turns, 5 users) and runs 24 probe queries against `/recall`, checking expected
+facts, supersession chains via `/users/{id}/memories`, and empty-context
+behavior on noise probes. Raw result JSON for every run quoted here is
+committed under `selfeval-results/`.
+
+A caveat I kept in mind throughout: the fixture metric is substring-based, so
+it is *more lenient* than an LLM judge — a raw-chat-text context can pass a
+probe that a judge would score poorly. That is exactly what v0.1's score
+shows, and why I didn't stop there.
+
+---
+
+## v0.1 — Contract skeleton: SQLite + FTS5 keyword recall
+
+**What changed:** All seven contract endpoints on FastAPI + SQLite (WAL,
+`synchronous=FULL`). Recall = BM25 over raw turn text, rendered as dated
+snippet lines. No extraction, no embeddings.
+
+**Why:** Get the contract shape and the measurement loop working before any
+intelligence. The eval harness (`scripts/selfeval.py`) was built *before*
+this version — every later decision is justified by its numbers.
+
+**Result:** Self-eval **17/24 (0.71)**, recall p50 1ms. The passing 17 are
+substring luck — expected words appear in raw chat snippets. The failures are
+the structural ones: noise resistance 0/3 (any keyword overlap returns junk),
+fact-evolution history checks 0/2 (`/users/{id}/memories` returns nothing —
+the exact "message log, not memory service" red flag), and the supersession
+probes can't work because nothing is extracted.
+
+**Next:** Extraction. The memories endpoint must show typed, keyed,
+provenance-carrying facts, and contradictions must supersede.
+
+---
+
+## v0.2 — LLM extraction with in-context supersession decisions
+
+**What changed:** `/turns` now runs a Claude extraction pass (structured
+output, pydantic-validated). The extractor sees the user's *existing active
+memories* (id, type, key, value) alongside the new turn and returns explicit
+actions: `create`, `supersede` (with the target memory id), or `reinforce`.
+Supersession writes a chain (`supersedes` / `superseded_by`, old row kept
+inactive). Each memory carries type/key/value/confidence/entities/provenance
+and a local embedding. Turns get a one-sentence third-person summary (a
+retrieval target) + embedding. Rule-based fallback extractor when no API key.
+Context assembly became tiered: known-facts → events → conversation snippets.
+
+**Why:** Contradiction detection is a semantic problem, not a string problem.
+"I just started at Notion" only contradicts `employment.employer = Stripe` if
+something can see both at once and reason about it — so the supersession
+decision belongs *inside* the extraction call, not in a post-hoc key-equality
+check. (The fallback extractor does use key equality — that's why it's the
+degraded path.)
+
+**Result:** **21/24 (0.88)**, up from 17. Fact evolution 4/4 (current fact
+returned, Stripe→Notion chain inspectable), corrections 1/1 (peanut→shellfish
+correction never materializes a peanut-allergy memory), opinion arc 1/1,
+implicit facts 2/2 ("walking Biscuit" → `pets.dog.name`). Ingest cost: 60.4s
+for 14 turns (~4.3s/turn with claude-opus-4-8) — well inside the eval's 60s
+per-call budget, and it buys the extraction quality this design bets on.
+Noise still 0/3: the profile tier is returned for *any* query.
+
+**Next:** Retrieval is still keyword-only; paraphrase queries score badly at
+the retrieval layer (masked on the fixture by the profile tier). Then noise.
+
+---
+
+## v0.3 — Hybrid retrieval: local dense embeddings + BM25, RRF fusion
+
+**What changed:** Added dense retrieval over memory and turn-summary
+embeddings (bge-small-en-v1.5, 384-d, ONNX via fastembed — runs locally, no
+API, model baked into the Docker image) and fused both rankings with
+reciprocal rank fusion (k=60). Query-side embeddings use BGE's asymmetric
+query prefix.
+
+**Why:** Pure BM25 misses paraphrases ("where is the user based?" vs "Lives
+in Berlin"); pure dense misses keyword-anchored queries ("what's their dog's
+*name*?"). RRF fuses rank positions, so no score calibration between the two
+systems is needed.
+
+**Result:** Fixture score flat at **21/24** — expected, since the profile
+tier already carried the paraphrase probes — but the retrieval layer itself
+got measurably better: through `/search` (no profile tier), "what part of the
+world is this person located in these days" (zero token overlap) now ranks
+`home.city: Lives in Berlin` first. Recall p50 2ms → 5ms — acceptable.
+Max-dense-similarity diagnostics plumbed out of `retrieve()` for the next
+step.
+
+**Next:** Noise resistance (0/3 since v0.1) and true multi-hop ranking.
+
+---
+
+## v0.4 — Entity-hop expansion + calibrated noise gate (two sub-iterations)
+
+**What changed (1):** One-hop graph expansion: extraction tags every memory
+with entities (`["biscuit","dog","pet"]`); at recall, memories sharing an
+entity with a top-fused hit are pulled in at the parent's score × 0.5.
+"What city does the user with the dog named Biscuit live in?" → Biscuit
+memory hits directly, location memory arrives via the shared-entity hop.
+
+**What changed (2):** Relevance gate for noise resistance. Calibrated on the
+fixture: hardest noise probe peaked at dense 0.585 while the weakest real
+probe sat at 0.592 — a 0.007 margin, too thin for one threshold. Two-tier
+rule instead: relevant if max dense ≥ 0.62 alone, or ≥ 0.50 *with* a keyword
+hit confirming. Below the gate, `/recall` returns `{"context": "",
+"citations": []}`.
+
+**What I observed (and fixed) along the way:**
+- *First attempt leaked (23/24, noise 2/3):* "Tell me about the user's
+  wedding plans" passed the gate — FTS5 indexes stopwords, so the query's
+  "the/about/me" matched every document and "keyword confirmation" was
+  vacuously true. Fix: query-side stopword stripping (including "user", which
+  our own "User ..." summaries inject into every document). Porter stemming
+  enabled on both FTS tables at the same time so the confirm signal can match
+  "live"→"Lives".
+- *That fix regressed p06 (23/24 again, different probe):* "Where does the
+  user live?" returned empty. Root cause was upstream in extraction: that
+  ingest had phrased the memory as "**Relocating** to Denver" (the
+  transition) rather than "**Lives in** Denver" (the state) — weak dense
+  match, no keyword match. Added an extraction-prompt rule: fact values are
+  phrased as the current state of the world; the transition becomes a
+  separate event memory. Retrieval failures can be extraction bugs.
+
+**Result:** **24/24 (1.00)**, including noise 3/3 — and stable at 24/24
+across two further independent fresh ingests (extraction has run-to-run
+variance; one clean run proves little). Recall p50 5ms.
+
+**Next:** The gate margins are honest but thin (calibrated on 24 probes, not
+2,400). The floors are env-tunable (`MEMORY_DENSE_FLOOR*`) and the
+calibration script is in the repo; with more fixture data I'd re-fit them
+first thing.
+
+---
+
+## v0.5 — Budget-safe assembly, citation hygiene, global /search
+
+**What changed:** Section-wise context building — a tier header is only
+emitted if at least one of its lines fits, so tiny budgets can't produce
+orphan headers; "previously: ..." history decorations are dropped below
+256-token budgets (history is the first nicety to cut when every token
+competes with a current fact); citations dedupe by turn (keep max score, cap
+12); `/search` with null user *and* session scopes globally — an explicit
+tool call is a deliberate "look everywhere".
+
+**Why:** The budget sweep showed degenerate outputs at the edges (a header
+with no content at `max_tokens=16`; duplicate citations when several memories
+share a source turn).
+
+**Result:** Still **24/24**. Budget sweep at max_tokens ∈ {16, 32, 64, 128,
+256, 512, 2048}: usage ratio ≤ 0.97, never over budget (the contract allows
+2×; we stay under 1×), and degradation is by priority — at 32 tokens you get
+exactly the top-ranked known facts and nothing else.
+
+**Next:** Docker verification on a clean machine path (compose up → smoke
+test → compose down/up persistence), README.
+
+---
+
+## Where I'd go next (not built)
+
+- **Re-fit the gate floors on a bigger probe set** — 24 probes is enough to
+  catch design errors (it caught two), not enough to trust 0.62/0.50 as
+  universal constants.
+- **Session-scoped working memory.** Recall currently treats "recent
+  conversations" as user-global. A same-session recency channel would help
+  long single-session evals.
+- **Embedding-based supersession backstop.** If the extractor misses a
+  contradiction (it sees existing memories, but context windows aren't
+  infallible), a write-time cosine check between the new memory and existing
+  active ones under the same key prefix could flag missed supersessions.
+- **Opinion-arc rendering.** Chains are stored and `/recall` shows
+  "previously: ...", but a 3+ step arc could be summarized as an arc
+  ("warmed → frustrated → pragmatic") rather than one hop of history.

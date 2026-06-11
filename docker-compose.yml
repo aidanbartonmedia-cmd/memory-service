@@ -1,0 +1,20 @@
+services:
+  memory-service:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Optional: enables LLM extraction (the high-quality path). Without it
+      # the service still runs, using the rule-based fallback extractor.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Optional: model override for extraction.
+      - MEMORY_LLM_MODEL=${MEMORY_LLM_MODEL:-claude-opus-4-8}
+      # Optional: if set, all endpoints except /health require
+      # "Authorization: Bearer <token>".
+      - MEMORY_AUTH_TOKEN=${MEMORY_AUTH_TOKEN:-}
+    volumes:
+      - memory-data:/data
+    restart: unless-stopped
+
+volumes:
+  memory-data:
