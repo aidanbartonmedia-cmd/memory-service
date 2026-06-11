@@ -30,9 +30,11 @@ LLM_TIMEOUT_S: float = float(os.environ.get("MEMORY_LLM_TIMEOUT_S", "45"))
 # Local embedding model (ONNX via fastembed; baked into the Docker image).
 EMBEDDING_MODEL: str = os.environ.get("MEMORY_EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 
-# Retrieval tuning (calibrated against fixtures/ -- see CHANGELOG).
+# Retrieval tuning (calibrated against fixtures/ -- see CHANGELOG v0.4 for
+# the calibration data behind the two floors).
 RRF_K: int = int(os.environ.get("MEMORY_RRF_K", "60"))
 DENSE_FLOOR: float = float(os.environ.get("MEMORY_DENSE_FLOOR", "0.62"))
+DENSE_FLOOR_LOW: float = float(os.environ.get("MEMORY_DENSE_FLOOR_LOW", "0.50"))
 HOP_DAMPING: float = float(os.environ.get("MEMORY_HOP_DAMPING", "0.5"))
 
 # Resilience

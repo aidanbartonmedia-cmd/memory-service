@@ -61,8 +61,8 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_owner ON memories(owner, active);
 CREATE INDEX IF NOT EXISTS idx_memories_session ON memories(source_session);
 
-CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts    USING fts5(doc_id UNINDEXED, text);
-CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(doc_id UNINDEXED, text);
+CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts    USING fts5(doc_id UNINDEXED, text, tokenize='porter unicode61');
+CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(doc_id UNINDEXED, text, tokenize='porter unicode61');
 """
 
 _conn: sqlite3.Connection | None = None

@@ -19,10 +19,25 @@ log = logging.getLogger("memory.retrieval")
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9']+")
 
+# FTS5 indexes everything — without query-side stopword removal, "tell me
+# about the user's wedding plans" keyword-matches every document containing
+# "the", and keyword evidence becomes meaningless (this broke the noise gate;
+# see CHANGELOG v0.4). "user" is included: our own turn summaries start with
+# "User ...", so it carries zero signal.
+_STOPWORDS = frozenset(
+    "a an the is are was were be been being am do does did doing what what's whats "
+    "who whose whom where when why how which tell me my mine your yours their theirs "
+    "his her hers its our ours this that these those there here of for to in on at "
+    "by with about from into onto over under and or but not no nor any some have has "
+    "had having can could should would will shall may might must i you he she it we "
+    "they them him us s t re ve ll d m don doesn didn isn aren wasn weren user users "
+    "know knows known anything something things stuff please".split()
+)
+
 
 def fts_query(query: str) -> str | None:
-    """Sanitize arbitrary text into a safe OR-of-terms FTS5 query."""
-    terms = _TOKEN_RE.findall(query)
+    """Sanitize arbitrary text into a safe OR-of-content-terms FTS5 query."""
+    terms = [t for t in _TOKEN_RE.findall(query) if t.lower() not in _STOPWORDS]
     if not terms:
         return None
     return " OR ".join(f'"{t}"' for t in terms[:32])
@@ -116,28 +131,105 @@ def rrf_fuse(rankings: list[list[tuple[str, float]]], k: int | None = None) -> l
     return sorted(fused.items(), key=lambda x: -x[1])
 
 
+import json as _json
+
+
+def entity_expand(owner: str, mem_ranked: list[tuple[str, float]], *, top_n: int = 6) -> list[tuple[str, float]]:
+    """One graph hop over shared entity tags.
+
+    'What city does the user with the dog named Biscuit live in?' retrieves
+    the Biscuit memory directly; the location memory shares no tokens with the
+    query and may rank poorly. Memories store entity tags at extraction time
+    (['biscuit','dog','pet'] / ['denver','home','location']) — any memory
+    sharing an entity with a top hit is pulled in at the parent's score damped
+    by HOP_DAMPING. One hop only: damping below the relevance floor squared
+    keeps second-order hops from dragging in the whole store.
+    """
+    if not mem_ranked:
+        return mem_ranked
+    parents = mem_ranked[:top_n]
+    parent_score = dict(parents)
+    with db.tx() as conn:
+        rows = conn.execute(
+            "SELECT id, entities_json FROM memories WHERE owner=? AND active=1",
+            (owner,),
+        ).fetchall()
+    entities_of: dict[str, set[str]] = {}
+    for r in rows:
+        try:
+            entities_of[r["id"]] = set(_json.loads(r["entities_json"] or "[]"))
+        except _json.JSONDecodeError:
+            entities_of[r["id"]] = set()
+
+    parent_entities: dict[str, float] = {}
+    for pid, score in parents:
+        for ent in entities_of.get(pid, ()):
+            parent_entities[ent] = max(parent_entities.get(ent, 0.0), score)
+
+    ranked_ids = {i for i, _ in mem_ranked}
+    expanded = list(mem_ranked)
+    for mem_id, ents in entities_of.items():
+        if mem_id in ranked_ids:
+            continue
+        shared = ents & parent_entities.keys()
+        if not shared:
+            continue
+        hop_score = max(parent_entities[e] for e in shared) * config.HOP_DAMPING
+        expanded.append((mem_id, hop_score))
+    expanded.sort(key=lambda x: -x[1])
+    return expanded
+
+
+def _relevance_gate(diag: dict[str, Any]) -> bool:
+    """Decide whether anything in the store is actually about this query.
+
+    Calibrated on the fixture probes (see CHANGELOG v0.4): the hardest noise
+    probe peaks at dense 0.585 while the weakest real probe sits at 0.592 —
+    too close for a single floor. Two-tier rule instead:
+      - dense >= DENSE_FLOOR (0.62): semantically close, relevant on its own
+      - DENSE_FLOOR_LOW (0.50) <= dense < 0.62: ambiguous zone — require a
+        stemmed-keyword (BM25) hit to confirm
+      - dense < 0.50: noise, regardless of keyword collisions
+    If embeddings are unavailable (degraded mode), fall back to BM25-only
+    evidence — weaker noise resistance, documented in README.
+    """
+    max_dense = max(diag["max_dense_memory"], diag["max_dense_turn"])
+    keyword_hits = diag["bm25_memory_hits"] + diag["bm25_turn_hits"]
+    if diag.get("dense_available", True):
+        if max_dense >= config.DENSE_FLOOR:
+            return True
+        return max_dense >= config.DENSE_FLOOR_LOW and keyword_hits > 0
+    return keyword_hits > 0
+
+
 def retrieve(owner: str, query: str, *, limit: int = 12) -> dict[str, Any]:
-    """Hybrid retrieval. Returns ranked memories/turns plus diagnostics used
-    by the relevance gate (max dense similarity, keyword hit counts)."""
+    """Hybrid retrieval + one entity hop + relevance gate.
+
+    Returns ranked memories/turns, diagnostics, and `relevant` — when False,
+    the caller returns an empty context (noise resistance)."""
     bm_m = bm25_memories(owner, query, limit * 2)
     bm_t = bm25_turns(owner, query, limit * 2)
 
-    qvec = embeddings.embed_one(query) if query.strip() else None
+    qvec = embeddings.embed_query(query) if query.strip() else None
     dn_m = dense_memories(owner, qvec, limit * 2) if qvec is not None else []
     dn_t = dense_turns(owner, qvec, limit * 2) if qvec is not None else []
 
-    mem_ranked = rrf_fuse([bm_m, dn_m])[:limit]
+    mem_ranked = rrf_fuse([bm_m, dn_m])
+    mem_ranked = entity_expand(owner, mem_ranked)[:limit]
     turn_ranked = rrf_fuse([bm_t, dn_t])[:limit]
 
+    diagnostics = {
+        "max_dense_memory": dn_m[0][1] if dn_m else 0.0,
+        "max_dense_turn": dn_t[0][1] if dn_t else 0.0,
+        "bm25_memory_hits": len(bm_m),
+        "bm25_turn_hits": len(bm_t),
+        "dense_available": qvec is not None,
+        "dense_memory": dict(dn_m),
+        "dense_turn": dict(dn_t),
+    }
     return {
         "memories": mem_ranked,
         "turns": turn_ranked,
-        "diagnostics": {
-            "max_dense_memory": dn_m[0][1] if dn_m else 0.0,
-            "max_dense_turn": dn_t[0][1] if dn_t else 0.0,
-            "bm25_memory_hits": len(bm_m),
-            "bm25_turn_hits": len(bm_t),
-            "dense_memory": dict(dn_m),
-            "dense_turn": dict(dn_t),
-        },
+        "relevant": _relevance_gate(diagnostics) if query.strip() else True,
+        "diagnostics": diagnostics,
     }

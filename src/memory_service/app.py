@@ -149,6 +149,16 @@ def post_turn(turn: TurnIn) -> dict[str, str]:
 def recall(req: RecallIn) -> RecallOut:
     owner = store.owner_key(req.user_id, req.session_id)
     retrieved = retrieval.retrieve(owner, req.query)
+    # Noise resistance: when nothing in the store is plausibly about this
+    # query, return an empty context rather than the user's profile — a
+    # frozen LLM treats whatever we inject as relevant, so irrelevant facts
+    # invite hallucinated connections. (/search stays ungated: an explicit
+    # tool call gets best-effort ranked results.)
+    if not retrieved["relevant"]:
+        log.info("recall gated to empty (owner=%s, diag=%s)",
+                 owner, {k: v for k, v in retrieved["diagnostics"].items()
+                         if not isinstance(v, dict)})
+        return RecallOut(context="", citations=[])
     context, citations = assembly.assemble(
         owner=owner, query=req.query, retrieved=retrieved, max_tokens=req.max_tokens
     )

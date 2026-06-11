@@ -79,7 +79,11 @@ stance on its own.
 home.*, family.*, pets.*, diet.*, health.*, preferences.*, opinions.*, events.*, projects.*. \
 Reuse the existing memory's key when superseding/reinforcing.
 8. value must stand alone without the conversation ("Works at Notion as a product manager", \
-not "started there this week").
+not "started there this week"). Phrase fact values as the CURRENT state of the world — \
+"Lives in Denver", "Works at Notion" — never as the transition that produced the state \
+("Relocating to Denver", "Just started at Notion"). Recall queries ask about the state \
+("where does the user live?"), so state phrasing is what retrieval must match. The \
+transition itself, if notable, is a separate event memory.
 9. entities: short lowercase tags for every salient proper noun AND category in the memory \
 (["notion", "product manager", "employment"], ["biscuit", "dog", "pet"]). These link \
 memories for multi-hop recall — be generous and consistent.

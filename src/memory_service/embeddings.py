@@ -62,6 +62,21 @@ def embed_one(text: str) -> np.ndarray | None:
     return out[0] if out else None
 
 
+def embed_query(text: str) -> np.ndarray | None:
+    """Query-side embedding. BGE models are asymmetric: queries get a special
+    instruction prefix (fastembed's query_embed), which sharpens the
+    relevant-vs-noise similarity separation the recall gate depends on."""
+    model = _get_model()
+    if model is None or not text:
+        return None
+    try:
+        vec = np.asarray(next(iter(model.query_embed([text]))), dtype=np.float32)
+    except Exception:
+        log.exception("query embedding failed")
+        return None
+    return vec / (np.linalg.norm(vec) or 1.0)
+
+
 def to_blob(vec: np.ndarray | None) -> bytes | None:
     return vec.astype(np.float32).tobytes() if vec is not None else None
 
