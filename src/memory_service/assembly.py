@@ -45,9 +45,9 @@ def turn_snippet(turn: dict[str, Any], max_chars: int = 240) -> str:
     return text[:max_chars]
 
 
-def _memory_line(mem: dict[str, Any]) -> str:
-    line = f"- {mem['value']} (updated {_date_of(mem['updated_at'])}"
-    if mem.get("supersedes"):
+def _memory_line(mem: dict[str, Any], *, include_history: bool = True) -> str:
+    line = f"- {mem['value'][:300]} (updated {_date_of(mem['updated_at'])}"
+    if include_history and mem.get("supersedes"):
         prior = store.get_memory(mem["supersedes"])
         if prior:
             line += f"; previously: {prior['value'][:120]}"
@@ -58,21 +58,10 @@ def _event_line(mem: dict[str, Any]) -> str:
     return f"- [{_date_of(mem['created_at'])}] {mem['value']}"
 
 
-class _Builder:
-    def __init__(self, max_tokens: int):
-        self.budget = max_tokens
-        self.lines: list[str] = []
-        self.citations: list[Citation] = []
-
-    def try_add(self, line: str, citation: Citation | None = None) -> bool:
-        cost = approx_tokens(line) + 1  # +1 for the newline
-        if cost > self.budget:
-            return False
-        self.budget -= cost
-        self.lines.append(line)
-        if citation is not None:
-            self.citations.append(citation)
-        return True
+_MAX_CITATIONS = 12
+# Below this budget we drop "previously: ..." decorations — history is the
+# first nicety to cut when every token competes with a current fact.
+_HISTORY_MIN_BUDGET = 256
 
 
 def _mem_citation(mem: dict[str, Any], score: float) -> Citation | None:
@@ -82,15 +71,30 @@ def _mem_citation(mem: dict[str, Any], score: float) -> Citation | None:
     return Citation(turn_id=turn_id, score=round(score, 4), snippet=mem["value"][:160])
 
 
+def _dedupe_citations(citations: list[Citation]) -> list[Citation]:
+    best: dict[str, Citation] = {}
+    for c in citations:
+        prev = best.get(c.turn_id)
+        if prev is None or c.score > prev.score:
+            best[c.turn_id] = c
+    return sorted(best.values(), key=lambda c: -c.score)[:_MAX_CITATIONS]
+
+
 def assemble(
     *,
     owner: str,
     query: str,
-    retrieved: dict[str, list[tuple[str, float]]],
+    retrieved: dict[str, Any],
     max_tokens: int,
 ) -> tuple[str, list[Citation]]:
+    """Render tiers A/B/C greedily under the budget.
+
+    Sections are built as (header, items) and a header is only emitted when
+    at least one of its items fits — no orphan headers at tiny budgets.
+    """
     mem_scores = dict(retrieved.get("memories", []))
     turn_scores = dict(retrieved.get("turns", []))
+    include_history = max_tokens >= _HISTORY_MIN_BUDGET
 
     actives = store.get_memories(owner, active_only=True)
     profile = [m for m in actives if m["type"] in _TYPE_ORDER]
@@ -111,34 +115,62 @@ def assemble(
     profile.sort(key=profile_rank)
     events.sort(key=lambda m: -mem_scores.get(m["id"], 0.0))
 
-    b = _Builder(max_tokens)
+    sections: list[tuple[str, list[tuple[str, Citation | None]]]] = []
 
-    if profile:
-        b.try_add("## Known facts about this user")
-        for mem in profile:
-            if not b.try_add(_memory_line(mem), _mem_citation(mem, mem_scores.get(mem["id"], 0.0))):
-                break
+    profile_items = [
+        (_memory_line(mem, include_history=include_history),
+         _mem_citation(mem, mem_scores.get(mem["id"], 0.0)))
+        for mem in profile
+    ]
+    if profile_items:
+        sections.append(("## Known facts about this user", profile_items))
 
-    relevant_events = [m for m in events]
-    if relevant_events:
-        b.try_add("\n## Relevant memories")
-        for mem in relevant_events:
-            if not b.try_add(_event_line(mem), _mem_citation(mem, mem_scores.get(mem["id"], 0.0))):
-                break
+    event_items = [
+        (_event_line(mem), _mem_citation(mem, mem_scores.get(mem["id"], 0.0)))
+        for mem in events
+    ]
+    if event_items:
+        sections.append(("## Relevant memories", event_items))
 
-    ranked_turns = sorted(turn_scores.items(), key=lambda x: -x[1])
-    if ranked_turns:
-        b.try_add("\n## Relevant from recent conversations")
-        for turn_id, score in ranked_turns:
-            turn = store.get_turn(turn_id)
-            if not turn:
-                continue
-            snippet = turn_snippet(turn)
-            line = f"- [{_date_of(turn['ts'])}] {snippet}"
-            if not b.try_add(line, Citation(turn_id=turn_id, score=round(score, 4), snippet=snippet[:160])):
-                break
+    turn_items: list[tuple[str, Citation | None]] = []
+    for turn_id, score in sorted(turn_scores.items(), key=lambda x: -x[1]):
+        turn = store.get_turn(turn_id)
+        if not turn:
+            continue
+        snippet = turn_snippet(turn)
+        turn_items.append((
+            f"- [{_date_of(turn['ts'])}] {snippet}",
+            Citation(turn_id=turn_id, score=round(score, 4), snippet=snippet[:160]),
+        ))
+    if turn_items:
+        sections.append(("## Relevant from recent conversations", turn_items))
 
-    context = "\n".join(b.lines).strip()
+    budget = max_tokens
+    out_lines: list[str] = []
+    citations: list[Citation] = []
+    for header, items in sections:
+        header_text = header if not out_lines else "\n" + header
+        header_cost = approx_tokens(header_text) + 1
+        if header_cost >= budget:
+            break
+        section_budget = budget - header_cost
+        section_lines: list[str] = []
+        for line, citation in items:
+            cost = approx_tokens(line) + 1
+            if cost > section_budget:
+                break  # items are ranked; everything after is lower priority
+            section_budget -= cost
+            section_lines.append(line)
+            if citation is not None:
+                citations.append(citation)
+        if section_lines:
+            out_lines.append(header_text)
+            out_lines.extend(section_lines)
+            budget = section_budget
+        # If nothing fit, the header was never charged; try the next tier
+        # (its lines may be shorter).
+
+    context = "\n".join(out_lines).strip()
     if not context.strip("#\n "):
         return "", []
-    return context, b.citations
+    return context, _dedupe_citations(citations)

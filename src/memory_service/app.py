@@ -167,7 +167,14 @@ def recall(req: RecallIn) -> RecallOut:
 
 @app.post("/search", dependencies=[Depends(auth)])
 def search(req: SearchIn) -> SearchOut:
-    owner = store.owner_key(req.user_id, req.session_id)
+    # Scope: user when given, else the anonymous session, else global —
+    # /search is an explicit agent tool call, so a scopeless search is a
+    # deliberate "look everywhere".
+    owner = (
+        store.owner_key(req.user_id, req.session_id)
+        if (req.user_id or req.session_id)
+        else None
+    )
     retrieved = retrieval.retrieve(owner, req.query, limit=req.limit)
     results: list[SearchResult] = []
     for mem_id, score in retrieved["memories"][: req.limit]:

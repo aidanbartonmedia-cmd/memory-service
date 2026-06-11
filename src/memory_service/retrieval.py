@@ -60,8 +60,9 @@ def _bm25_candidates(fts_table: str, q: str, conn, cap: int = 400) -> dict[str, 
     return best
 
 
-def bm25_memories(owner: str, query: str, limit: int = 20) -> list[tuple[str, float]]:
-    """Returns [(memory_id, bm25_score)] best-first. Active memories only."""
+def bm25_memories(owner: str | None, query: str, limit: int = 20) -> list[tuple[str, float]]:
+    """Returns [(memory_id, bm25_score)] best-first. Active memories only.
+    owner=None searches globally (explicit /search with no scope)."""
     q = fts_query(query)
     if q is None:
         return []
@@ -70,18 +71,20 @@ def bm25_memories(owner: str, query: str, limit: int = 20) -> list[tuple[str, fl
         if not best:
             return []
         marks = ",".join("?" for _ in best)
+        where = "id IN (%s) AND active=1" % marks
+        params: tuple = tuple(best.keys())
+        if owner is not None:
+            where += " AND owner=?"
+            params += (owner,)
         owned = {
             r["id"]
-            for r in conn.execute(
-                f"SELECT id FROM memories WHERE id IN ({marks}) AND owner=? AND active=1",
-                (*best.keys(), owner),
-            ).fetchall()
+            for r in conn.execute(f"SELECT id FROM memories WHERE {where}", params).fetchall()
         }
     ranked = sorted(((i, s) for i, s in best.items() if i in owned), key=lambda x: -x[1])
     return ranked[:limit]
 
 
-def bm25_turns(owner: str, query: str, limit: int = 20) -> list[tuple[str, float]]:
+def bm25_turns(owner: str | None, query: str, limit: int = 20) -> list[tuple[str, float]]:
     q = fts_query(query)
     if q is None:
         return []
@@ -90,33 +93,45 @@ def bm25_turns(owner: str, query: str, limit: int = 20) -> list[tuple[str, float
         if not best:
             return []
         marks = ",".join("?" for _ in best)
+        where = "id IN (%s)" % marks
+        params: tuple = tuple(best.keys())
+        if owner is not None:
+            where += " AND owner=?"
+            params += (owner,)
         owned = {
             r["id"]
-            for r in conn.execute(
-                f"SELECT id FROM turns WHERE id IN ({marks}) AND owner=?",
-                (*best.keys(), owner),
-            ).fetchall()
+            for r in conn.execute(f"SELECT id FROM turns WHERE {where}", params).fetchall()
         }
     ranked = sorted(((i, s) for i, s in best.items() if i in owned), key=lambda x: -x[1])
     return ranked[:limit]
 
 
-def dense_memories(owner: str, qvec, limit: int = 20) -> list[tuple[str, float]]:
-    """[(memory_id, cosine)] over the owner's active memories."""
+def dense_memories(owner: str | None, qvec, limit: int = 20) -> list[tuple[str, float]]:
+    """[(memory_id, cosine)] over active memories (owner=None: global)."""
     with db.tx() as conn:
-        rows = conn.execute(
-            "SELECT id, embedding FROM memories WHERE owner=? AND active=1 AND embedding IS NOT NULL",
-            (owner,),
-        ).fetchall()
+        if owner is not None:
+            rows = conn.execute(
+                "SELECT id, embedding FROM memories WHERE owner=? AND active=1 AND embedding IS NOT NULL",
+                (owner,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, embedding FROM memories WHERE active=1 AND embedding IS NOT NULL"
+            ).fetchall()
     return embeddings.cosine_rank(qvec, [(r["id"], r["embedding"]) for r in rows])[:limit]
 
 
-def dense_turns(owner: str, qvec, limit: int = 20) -> list[tuple[str, float]]:
+def dense_turns(owner: str | None, qvec, limit: int = 20) -> list[tuple[str, float]]:
     with db.tx() as conn:
-        rows = conn.execute(
-            "SELECT id, embedding FROM turns WHERE owner=? AND embedding IS NOT NULL",
-            (owner,),
-        ).fetchall()
+        if owner is not None:
+            rows = conn.execute(
+                "SELECT id, embedding FROM turns WHERE owner=? AND embedding IS NOT NULL",
+                (owner,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, embedding FROM turns WHERE embedding IS NOT NULL"
+            ).fetchall()
     return embeddings.cosine_rank(qvec, [(r["id"], r["embedding"]) for r in rows])[:limit]
 
 
@@ -202,7 +217,7 @@ def _relevance_gate(diag: dict[str, Any]) -> bool:
     return keyword_hits > 0
 
 
-def retrieve(owner: str, query: str, *, limit: int = 12) -> dict[str, Any]:
+def retrieve(owner: str | None, query: str, *, limit: int = 12) -> dict[str, Any]:
     """Hybrid retrieval + one entity hop + relevance gate.
 
     Returns ranked memories/turns, diagnostics, and `relevant` — when False,
@@ -215,7 +230,9 @@ def retrieve(owner: str, query: str, *, limit: int = 12) -> dict[str, Any]:
     dn_t = dense_turns(owner, qvec, limit * 2) if qvec is not None else []
 
     mem_ranked = rrf_fuse([bm_m, dn_m])
-    mem_ranked = entity_expand(owner, mem_ranked)[:limit]
+    if owner is not None:
+        mem_ranked = entity_expand(owner, mem_ranked)
+    mem_ranked = mem_ranked[:limit]
     turn_ranked = rrf_fuse([bm_t, dn_t])[:limit]
 
     diagnostics = {
