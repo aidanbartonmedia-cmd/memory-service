@@ -12,7 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import config, db, store, retrieval, assembly
+from . import assembly, config, db, embeddings, extraction, retrieval, store
 from .models import (
     MemoriesOut,
     MemoryOut,
@@ -95,6 +95,7 @@ async def health() -> JSONResponse:
 def post_turn(turn: TurnIn) -> dict[str, str]:
     ts = turn.parsed_timestamp().isoformat()
     messages = [m.model_dump() for m in turn.messages]
+    # 1. Persist the raw turn first — extraction failures must never lose data.
     turn_id = store.add_turn(
         session_id=turn.session_id,
         user_id=turn.user_id,
@@ -102,8 +103,45 @@ def post_turn(turn: TurnIn) -> dict[str, str]:
         messages=messages,
         metadata=turn.metadata,
     )
-    log.info("turn %s stored (session=%s user=%s, %d messages)",
-             turn_id, turn.session_id, turn.user_id, len(messages))
+    owner = store.owner_key(turn.user_id, turn.session_id)
+
+    # 2. Extract structured memories (synchronously — the contract requires
+    #    read-after-write visibility when this endpoint returns).
+    existing = store.get_memories(owner, active_only=True)
+    result, mode = extraction.extract(messages, existing, ts)
+
+    applied = 0
+    for em in result.memories:
+        try:
+            if em.action == "reinforce" and em.supersedes_id:
+                store.touch_memory(em.supersedes_id, confidence=em.confidence)
+                continue
+            supersedes_id = em.supersedes_id if em.supersedes_id else None
+            vec = embeddings.embed_one(f"{em.key}: {em.value}")
+            store.insert_memory(
+                owner=owner,
+                user_id=turn.user_id,
+                type_=em.type,
+                key=em.key,
+                value=em.value,
+                confidence=em.confidence,
+                entities=em.entities,
+                source_session=turn.session_id,
+                source_turn=turn_id,
+                supersedes_id=supersedes_id,
+                embedding=embeddings.to_blob(vec),
+            )
+            applied += 1
+        except Exception:
+            log.exception("failed to apply extracted memory %s", em.key)
+
+    # 3. Enrich the turn with its summary (a retrieval target) + embedding.
+    summary = result.turn_summary.strip()
+    turn_vec = embeddings.embed_one(summary) if summary else None
+    store.enrich_turn(turn_id, summary=summary, embedding=embeddings.to_blob(turn_vec))
+
+    log.info("turn %s stored (session=%s user=%s) extraction=%s memories=%d",
+             turn_id, turn.session_id, turn.user_id, mode, applied)
     return {"id": turn_id}
 
 
@@ -112,7 +150,7 @@ def recall(req: RecallIn) -> RecallOut:
     owner = store.owner_key(req.user_id, req.session_id)
     retrieved = retrieval.retrieve(owner, req.query)
     context, citations = assembly.assemble(
-        owner=owner, retrieved=retrieved, max_tokens=req.max_tokens
+        owner=owner, query=req.query, retrieved=retrieved, max_tokens=req.max_tokens
     )
     return RecallOut(context=context, citations=citations)
 
