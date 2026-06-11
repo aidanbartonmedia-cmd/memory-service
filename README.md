@@ -6,7 +6,7 @@ retrieval under a token budget — with fact supersession, multi-hop entity
 linking, and calibrated noise resistance.
 
 ```bash
-cp .env.example .env   # add ANTHROPIC_API_KEY (recommended — see Failure modes)
+cp .env.example .env   # then uncomment + set ANTHROPIC_API_KEY (recommended)
 docker compose up -d
 until curl -sf http://localhost:8080/health; do sleep 1; done
 ```
@@ -132,19 +132,33 @@ models per environment.
    This is what answers "what city does the user with the dog named Biscuit
    live in?" — the location memory shares no tokens with the query and
    arrives via the `biscuit`/`pet` link.
-4. **Relevance gate** (noise resistance): relevant iff max dense similarity
-   ≥ 0.62, *or* ≥ 0.50 with a stemmed-keyword confirmation. Below the gate →
-   `{"context": "", "citations": []}`, 200, never an error. The two floors
-   are calibrated, not guessed: on the fixture, the hardest noise probe peaks
-   at 0.585 and the weakest genuine probe sits at 0.592 (calibration data and
-   both gate bugs found on the way are in CHANGELOG v0.4). Note the floors
-   are calibrated *for bge-small-en-v1.5's similarity distribution* — if you
-   change `MEMORY_EMBEDDING_MODEL`, re-run the calibration (CHANGELOG v0.4
-   documents the method) and set `MEMORY_DENSE_FLOOR*` accordingly. Gating
-   applies to `/recall` only — `/search` is an explicit tool call and stays
-   best-effort.
-5. **Tiered assembly under the budget** (chars/4 ≈ tokens; contract allows 2×,
-   measured usage stays ≤ 0.97×):
+4. **Relevance gate** (noise resistance): an item is evidence on its own if
+   its dense similarity ≥ 0.62. In the ambiguous band [0.50, 0.62) —
+   where, measured on the stress fixture, genuine paraphrases ("what does
+   this person do to pay the bills?") and frame-matched noise ("what's the
+   user's favorite movie?" hitting *favorite cuisine*) fully overlap — the
+   item must additionally show **term-level support**: one of the query's
+   content terms, embedded alone, must clear 0.52 cosine against that same
+   item. Frame words (favorite, plans, name, kind...) are excluded from
+   evidence terms — they're why the noise item scored high holistically in
+   the first place. On the fixture this separates cleanly: noise topical
+   terms (wedding, movie, soccer) top out at 0.496 support, signal terms
+   (dinner, pay, salary, live) bottom at 0.55+. No evidence →
+   `{"context": "", "citations": []}`, 200, never an error.
+
+   The gate went through three measured designs (single floor: 0.007
+   margin; global dense + any keyword: leaked via split evidence; per-item
+   dense + keyword: leaked via frame-word keywords) — the failures and
+   calibration data for each are in CHANGELOG v0.4/v0.7, and the committed
+   calibration artifact is `selfeval-results/calibration-v0.7.txt`,
+   reproducible via `scripts/calibrate_gate.py`. All three floors are
+   calibrated *for bge-small-en-v1.5's similarity distribution*: change
+   `MEMORY_EMBEDDING_MODEL` and you must re-run the calibration and reset
+   `MEMORY_DENSE_FLOOR*` / `MEMORY_TERM_FLOOR`. Gating applies to `/recall`
+   only — `/search` is an explicit tool call and stays best-effort.
+5. **Tiered assembly under the budget** (≈4 chars/token for ASCII, 1
+   token/char for non-ASCII so dense scripts can't breach the bound;
+   contract allows 2×, measured usage stays ≤ 0.95×):
 
    - **A. Known facts about this user** — all active facts/preferences/
      opinions, ordered fact→preference→opinion, then query-relevance, then
@@ -156,8 +170,9 @@ models per environment.
    Priority under pressure = exactly that order (the spec's order). Cuts are
    whole-line, bottom-up within a tier; a tier header is only emitted if at
    least one line fits; "previously: …" history decorations are the first
-   nicety dropped (budgets < 256). At `max_tokens=32` you get the single
-   most load-bearing known fact and nothing else.
+   nicety dropped (budgets < 256); below header-sized budgets the single
+   top-priority fact is emitted bare. At `max_tokens=16` you get the most
+   load-bearing known fact and nothing else.
 
    Citations map every rendered line to its source turn (`source_turn` for
    memories, the turn itself for tier C), deduped by turn keeping max score.
@@ -173,6 +188,11 @@ the session demonstrably belongs to them. The implication is deliberate: a
 caller that knows the session was the one writing it); deployments with
 untrusted callers should set `MEMORY_AUTH_TOKEN`. Concurrent users are
 isolated by the same key; the test suite hammers this in parallel threads.
+One more deliberate scope decision: `/search` with `user_id` *and*
+`session_id` both null searches **globally across all owners** — `/search`
+models an explicit agent tool call, so a scopeless search is read as a
+deliberate "look everywhere" rather than an error. `/recall` never does
+this; it always resolves to exactly one owner scope.
 
 ## 5. Fact evolution
 
@@ -212,8 +232,8 @@ isolated by the same key; the test suite hammers this in parallel threads.
   implicit-fact, and opinion-arc probes are simply out of reach of the
   rule-based path (that's why the fallback exists *and* why it's the
   fallback). Cost: nondeterminism — mitigated by schema-validated output,
-  state-phrasing rules, and two independent full-ingest stability runs at
-  24/24.
+  state-phrasing rules, and independent full-ingest stability runs (32/32
+  twice at v0.7).
 - **SQLite over a vector DB**: transactional supersession + read-after-write
   beats ANN performance we don't need at this scale (§2).
 - **Brute-force cosine** is O(n) per query — correct until ~10⁵ memories per
@@ -223,17 +243,20 @@ isolated by the same key; the test suite hammers this in parallel threads.
   is worse than no context. The margins are honest-but-thin (calibrated on 24
   probes); floors are env-tunable and the calibration method is in the repo.
 - **chars/4 token approximation**: dependency-free and within the contract's
-  2× tolerance (measured ≤ 0.97×); exact tokenization would add a tokenizer
-  dependency to save tokens nobody is losing.
+  2× tolerance (measured ≤ 0.95×, with non-ASCII characters charged a full
+  token each so CJK text can't silently breach the bound); exact
+  tokenization would add a tokenizer dependency to save tokens nobody is
+  losing.
 
 ## 7. Failure modes
 
 | Condition | Behavior |
 |---|---|
 | No `ANTHROPIC_API_KEY` | Service runs; extraction degrades to the rule-based fallback (regex patterns for employment/location/pets/allergies/preferences, supersession by exact key collision). Recall, persistence, contract all intact. Logged at startup-adjacent call sites. |
-| Anthropic API down / timeout / over quota | Same degradation, per turn: 2 retries (SDK), 45s timeout, then heuristic fallback — `POST /turns` still returns 201 with the turn and whatever the fallback extracted. |
+| Anthropic API down / slow / over quota | Per-turn degradation under a **hard 40s wall-clock deadline** on the whole extraction call (the eval gives `/turns` 60s total; per-attempt timeouts and retry-after sleeps compose multiplicatively, so only a request-level deadline actually bounds the tail — 20s SDK timeout × ≤2 attempts, capped at 40s, then heuristic fallback). `POST /turns` still returns 201, inside the budget, with whatever the fallback extracted. |
 | Embedding model unavailable (corrupt cache; it's baked into the image so this is exotic) | Dense retrieval and the dense gate disable; BM25-only retrieval with keyword-evidence gating. Weaker paraphrase recall and noise resistance, no crash. |
-| Cold store / unknown user / empty query | `200 {"context": "", "citations": []}` — never an error. |
+| Cold store / unknown user | `200 {"context": "", "citations": []}` — never an error. |
+| Empty query for a known user | Returns the known-facts profile: an empty query is read as "give me the standing context", which is what an agent priming a fresh turn wants. (Deliberate — and distinct from noise queries, which return empty.) |
 | Malformed JSON, missing fields, wrong types, unicode oddities, FTS metacharacters | 400 (422-class) with a JSON error body; fuzz cases in the test suite. |
 | Oversized payload | 413 before body parsing (default cap 8MB). |
 | Kill mid-write / `docker compose down` mid-write | A turn applies as **one** transaction (turn + memories + supersession flips), so WAL either commits all of it or rolls all of it back — never a turn without its memories or a half-flipped chain. A client that never received its 201 has, contractually, written nothing. Committed turns survive (restart tests). |
@@ -242,23 +265,32 @@ isolated by the same key; the test suite hammers this in parallel threads.
 ## 8. How to run the tests
 
 ```bash
-# Contract / robustness / persistence / scoping / auth — fast, no API key,
-# no network (runs extraction in heuristic mode):
+# Contract / robustness / persistence / scoping / auth / recall-quality —
+# fast, no API key, no network (runs extraction in heuristic mode; the
+# recall-quality test reports its X-of-Y metric and asserts a degraded-mode
+# floor):
 python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest tests/ -q          # 29 tests, <1s
+.venv/bin/python -m pytest tests/ -q          # 38 tests, ~2s
 
-# Recall-quality self-eval (the iteration loop; uses the LLM extractor,
-# needs ANTHROPIC_API_KEY in the service environment):
+# Full recall-quality self-eval (the iteration loop; uses the LLM
+# extractor, needs ANTHROPIC_API_KEY in the service environment):
 docker compose up -d
-.venv/bin/python scripts/selfeval.py          # ingests fixtures/, runs 24 probes
+.venv/bin/python scripts/selfeval.py          # ingests fixtures/, runs 32 probes
+
+# Gate calibration + budget compliance (committed artifacts in
+# selfeval-results/):
+PYTHONPATH=src .venv/bin/python scripts/calibrate_gate.py
+.venv/bin/python scripts/budget_sweep.py
 ```
 
 `scripts/selfeval.py` prints per-category pass rates and writes a JSON report
 to `selfeval-results/` — the numbers quoted in `CHANGELOG.md` are those
-files, committed. Current state: **24/24** (fact evolution, multi-hop,
-corrections, opinion arc, implicit facts, noise, keyword, cold-session),
-stable across two independent fresh ingests, recall p50 ≈ 5ms, budget usage
-≤ 0.97× at every budget from 16 to 2048 tokens.
+files, committed in this repo. Current state: **32/32** (fact evolution,
+multi-hop, corrections, opinion arc, implicit facts, 8 noise probes
+including cross-user stress cases, paraphrase, keyword, cold-session),
+stable across two independent fresh ingests at v0.7, recall p50 ≈ 5ms,
+budget usage ≤ 0.95× at every budget from 8 to 2048 tokens
+(`selfeval-results/budget-sweep-v0.7.txt`).
 
 ---
 
@@ -271,23 +303,30 @@ converges with the field, it's worth being precise about why:
 - **API shape** — dictated by the challenge contract (endpoints, the
   `fact|preference|opinion|event` enum, `supersedes`/`active`, even the
   context-format example), so any resemblance there is the spec's, not a lift.
-- **"LLM decides add-vs-update with existing memories in context"** is by now
-  an industry-generic pattern (mem0's update phase is the best-known
-  exemplar). The mechanics here are my own: the supersession target is chosen
-  by *id* against a rendered active-memory table, reinforce is a first-class
-  action, and the doubly-linked chain with `active` flags is shaped for this
-  spec's inspectability requirement.
-- **Hybrid BM25 + dense + RRF** is textbook IR, deliberately so — the brief
-  asks for something deliberate, not exotic. The parts you won't find
-  elsewhere: the **calibrated two-tier noise gate** (with the calibration
-  data and both bugs it surfaced committed in CHANGELOG v0.4) and the
-  **entity-hop at extraction-tagged granularity** rather than a full graph
-  database.
-- **No public analog I know of**: the `DELETE /sessions/{id}` supersession
-  **chain repair** (deleting the superseding session *reactivates* the prior
-  fact — purpose-built for this eval's cleanup semantics), and the
-  budget-assembly details (header charging, whole-line cuts,
-  history-decoration dropping under 256 tokens).
+- **Extraction: nearest analog is mem0's update phase**, which also renders
+  existing memories with ids and has an LLM return add/update/delete
+  decisions. The differences are load-bearing, not cosmetic: here extraction
+  and reconciliation are **one fused call** (the contradiction decision sees
+  the raw utterance, not a pre-extracted candidate); the reconciliation
+  context is **all** active memories, not a top-k-similar retrieval that can
+  miss the contradicted fact; there is deliberately **no delete** — an
+  append-only doubly-linked chain with `active` flags, shaped for this
+  spec's inspectability requirement; and `reinforce` is a first-class
+  confidence-ratcheting action rather than a no-op.
+- **Recall: nearest analog is Zep/Graphiti's "land and expand"** (BM25 +
+  cosine fused with RRF, then graph expansion from initial hits) — and
+  hybrid+RRF itself is textbook IR, deliberately so; the brief asks for
+  something deliberate, not exotic. The differences: expansion here is over
+  **flat extraction-time entity tags**, exactly one hop, with parent×0.5
+  damping chosen so second-order hops fall below the relevance floor — no
+  graph store, no typed/temporal edges, no BFS frontier.
+- **No public analog I know of**: the **term-support relevance gate**
+  (ambiguous-zone items must show per-term semantic support from the query's
+  content words, frame words excluded — calibrated, with the data and all
+  three failed predecessor designs committed in CHANGELOG v0.4/v0.7), and
+  the `DELETE /sessions/{id}` supersession **chain repair** (deleting the
+  superseding session *reactivates* the prior fact — purpose-built for this
+  eval's cleanup semantics).
 
 ### Repo map
 
@@ -303,6 +342,8 @@ src/memory_service/
   models.py      lenient-in / exact-out pydantic shapes
   config.py      env knobs (all defaulted)
 tests/           contract, robustness, persistence, scoping, auth
-fixtures/        5 scripted conversations + 24 probes (the self-eval set)
-scripts/selfeval.py   the measurement loop behind every CHANGELOG entry
+fixtures/        5 scripted conversations + 32 probes (the self-eval set)
+scripts/selfeval.py        the measurement loop behind every CHANGELOG entry
+scripts/calibrate_gate.py  re-fit the gate floors (run after changing models)
+scripts/budget_sweep.py    verify max_tokens compliance across budgets
 ```

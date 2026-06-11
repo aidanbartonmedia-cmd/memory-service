@@ -20,8 +20,9 @@ def test_wrong_types_4xx(client):
     assert 400 <= r.status_code < 500
     r = client.post("/recall", json={"query": "x", "session_id": "s", "max_tokens": "many"})
     assert 400 <= r.status_code < 500
+    # Out-of-range but well-typed integers are clamped, not rejected.
     r = client.post("/recall", json={"query": "x", "session_id": "s", "max_tokens": -5})
-    assert 400 <= r.status_code < 500
+    assert r.status_code == 200
 
 
 def test_unicode_oddities_survive(client):

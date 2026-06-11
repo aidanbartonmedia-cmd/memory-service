@@ -346,6 +346,57 @@
       "query": "What pet-related mishap did the user mention?",
       "user_id": "fx-maya", "session_id": "probe-s5",
       "expect_any": ["leash", "chewed"]
+    },
+    {
+      "id": "p25", "category": "noise",
+      "query": "Tell me about the user's wedding plans.",
+      "user_id": "fx-maya", "session_id": "probe-x1",
+      "expect_empty": true,
+      "comment": "Cross-user gate stress: same noise query as p20 pointed at a DIFFERENT user. v0.6 leaked the full profile here (global-evidence gate bug, fixed v0.7 with per-item conjunction)."
+    },
+    {
+      "id": "p26", "category": "noise",
+      "query": "Tell me about the user's wedding plans.",
+      "user_id": "fx-omar", "session_id": "probe-x2",
+      "expect_empty": true
+    },
+    {
+      "id": "p27", "category": "noise",
+      "query": "What's the user's favorite soccer team?",
+      "user_id": "fx-omar", "session_id": "probe-x3",
+      "expect_empty": true
+    },
+    {
+      "id": "p28", "category": "noise",
+      "query": "What's the user's favorite movie?",
+      "user_id": "fx-jonas", "session_id": "probe-x4",
+      "expect_empty": true,
+      "comment": "Keyword-collision stress: 'favorite' stem-matches his 'favorite cuisine: Thai' memory — per-item rule requires the SAME item to also clear the dense floor"
+    },
+    {
+      "id": "p29", "category": "noise",
+      "query": "Does the user play any musical instruments?",
+      "user_id": "fx-priya", "session_id": "probe-x5",
+      "expect_empty": true
+    },
+    {
+      "id": "p30", "category": "paraphrase",
+      "query": "What should I avoid cooking for them at dinner?",
+      "user_id": "fx-jonas", "session_id": "probe-x6",
+      "expect_any": ["shellfish"],
+      "comment": "Zero token overlap with 'Allergic to shellfish' — pure-dense recall through the ambiguous gate zone"
+    },
+    {
+      "id": "p31", "category": "paraphrase",
+      "query": "What does this person do to pay the bills?",
+      "user_id": "fx-jonas", "session_id": "probe-x7",
+      "expect_any": ["photographer"]
+    },
+    {
+      "id": "p32", "category": "paraphrase",
+      "query": "Which company pays their salary these days?",
+      "user_id": "fx-maya", "session_id": "probe-x8",
+      "expect_any": ["Notion"]
     }
   ]
 }

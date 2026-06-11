@@ -1,0 +1,36 @@
+probe  category        max_mem max_turn   gate
+p01    fact_evolution    0.618    0.601   PASS
+p02    fact_evolution    0.635    0.581   PASS
+p03    multi_hop         0.772    0.736   PASS
+p04    keyword           0.776    0.562   PASS
+p05    implicit          0.643    0.641   PASS
+p06    fact_evolution    0.667    0.603   PASS
+p07    correction        0.701    0.627   PASS
+p08    preference        0.790    0.580   PASS
+p09    implicit          0.669    0.477   PASS
+p10    recall            0.680    0.503   PASS
+p11    opinion_arc       0.783    0.806   PASS
+p12    preference        0.680    0.581   PASS
+p13    fact_evolution    0.627    0.623   PASS
+p14    preference        0.631    0.640   PASS
+p15    recall            0.669    0.562   PASS
+p16    recall            0.561    0.720   PASS
+p17    recall            0.623    0.683   PASS
+p18    noise             0.427    0.360  gated
+p19    noise             0.494    0.469  gated
+p20    noise             0.580    0.591  gated
+p21    cold_session      0.000    0.000  gated
+p22    keyword           0.756    0.644   PASS
+p23    multi_hop         0.621    0.680   PASS
+p24    recall            0.643    0.723   PASS
+p25    noise             0.594    0.570  gated
+p26    noise             0.549    0.566  gated
+p27    noise             0.500    0.443  gated
+p28    noise             0.588    0.355  gated
+p29    noise             0.451    0.467  gated
+p30    paraphrase        0.582    0.561   PASS
+p31    paraphrase        0.575    0.497   PASS
+p32    paraphrase        0.570    0.483   PASS
+
+noise/cold probes, best sims (gate must REJECT): [0.0, 0.427, 0.467, 0.494, 0.5, 0.566, 0.588, 0.591, 0.594]
+signal probes, lowest 5 (gate must PASS):         [0.57, 0.575, 0.582, 0.618, 0.627]

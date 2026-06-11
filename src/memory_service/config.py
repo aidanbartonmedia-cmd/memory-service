@@ -24,8 +24,13 @@ AUTH_TOKEN: str | None = os.environ.get("MEMORY_AUTH_TOKEN") or None
 # rule-based extractor (documented in README: Failure modes).
 ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY") or None
 LLM_MODEL: str = os.environ.get("MEMORY_LLM_MODEL", "claude-opus-4-8")
-LLM_MAX_RETRIES: int = int(os.environ.get("MEMORY_LLM_MAX_RETRIES", "2"))
-LLM_TIMEOUT_S: float = float(os.environ.get("MEMORY_LLM_TIMEOUT_S", "45"))
+# The eval gives /turns 60 seconds TOTAL. SDK retries compose multiplicatively
+# (and 429 retry-after sleeps can exceed the per-attempt timeout), so the
+# per-attempt knobs are kept tight AND llm_extract enforces a hard request-
+# level wall-clock deadline, after which extraction falls back to heuristics.
+LLM_MAX_RETRIES: int = int(os.environ.get("MEMORY_LLM_MAX_RETRIES", "1"))
+LLM_TIMEOUT_S: float = float(os.environ.get("MEMORY_LLM_TIMEOUT_S", "20"))
+EXTRACTION_DEADLINE_S: float = float(os.environ.get("MEMORY_EXTRACTION_DEADLINE_S", "40"))
 
 # Local embedding model (ONNX via fastembed; baked into the Docker image).
 EMBEDDING_MODEL: str = os.environ.get("MEMORY_EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
@@ -35,6 +40,7 @@ EMBEDDING_MODEL: str = os.environ.get("MEMORY_EMBEDDING_MODEL", "BAAI/bge-small-
 RRF_K: int = int(os.environ.get("MEMORY_RRF_K", "60"))
 DENSE_FLOOR: float = float(os.environ.get("MEMORY_DENSE_FLOOR", "0.62"))
 DENSE_FLOOR_LOW: float = float(os.environ.get("MEMORY_DENSE_FLOOR_LOW", "0.50"))
+TERM_FLOOR: float = float(os.environ.get("MEMORY_TERM_FLOOR", "0.52"))
 HOP_DAMPING: float = float(os.environ.get("MEMORY_HOP_DAMPING", "0.5"))
 
 # Resilience

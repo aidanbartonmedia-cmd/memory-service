@@ -84,7 +84,7 @@ async def auth(request: Request) -> None:
 
 # ---------- endpoints ----------
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health() -> JSONResponse:
     if not db.ready():
         return JSONResponse(status_code=503, content={"status": "starting"})

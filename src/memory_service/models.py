@@ -48,9 +48,15 @@ class TurnIn(BaseModel):
     metadata: dict[str, Any] | None = None
 
     def parsed_timestamp(self) -> datetime:
+        """Always returns an aware UTC datetime. ts is stored as TEXT and
+        compared lexicographically; mixing naive and offset-carrying ISO
+        strings would corrupt recency ordering."""
         if self.timestamp:
             try:
-                return datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
             except ValueError:
                 pass
         return datetime.now(timezone.utc)
@@ -62,12 +68,19 @@ class RecallIn(BaseModel):
     query: str = ""
     session_id: str | None = None
     user_id: str | None = None
-    max_tokens: int = Field(default=1024, ge=16, le=32768)
+    max_tokens: int = 1024
 
     @field_validator("query", mode="before")
     @classmethod
     def _query_to_str(cls, v: Any) -> str:
         return _coerce_text(v)
+
+    @field_validator("max_tokens")
+    @classmethod
+    def _clamp_budget(cls, v: int) -> int:
+        # Out-of-range budgets are clamped, not rejected: a recall with
+        # max_tokens=4 deserves a best-effort tiny answer, not a 400.
+        return max(8, min(v, 32768))
 
 
 class SearchIn(BaseModel):
@@ -76,12 +89,17 @@ class SearchIn(BaseModel):
     query: str = ""
     session_id: str | None = None
     user_id: str | None = None
-    limit: int = Field(default=10, ge=1, le=100)
+    limit: int = 10
 
     @field_validator("query", mode="before")
     @classmethod
     def _query_to_str(cls, v: Any) -> str:
         return _coerce_text(v)
+
+    @field_validator("limit")
+    @classmethod
+    def _clamp_limit(cls, v: int) -> int:
+        return max(1, min(v, 100))
 
 
 # ---- responses (contract shapes) ----

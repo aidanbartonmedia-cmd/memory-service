@@ -125,9 +125,13 @@ def assemble(
     if profile_items:
         sections.append(("## Known facts about this user", profile_items))
 
+    # Tier B is "query-relevant memories" (the spec's words): only events the
+    # retrieval layer actually surfaced for THIS query, best-first, capped —
+    # not a dump of every event the user ever mentioned.
+    scored_events = [m for m in events if mem_scores.get(m["id"], 0.0) > 0.0][:5]
     event_items = [
         (_event_line(mem), _mem_citation(mem, mem_scores.get(mem["id"], 0.0)))
-        for mem in events
+        for mem in scored_events
     ]
     if event_items:
         sections.append(("## Relevant memories", event_items))
@@ -171,6 +175,18 @@ def assemble(
         # (its lines may be shorter).
 
     context = "\n".join(out_lines).strip()
+
+    # Tiny-budget fallback: when even "header + one line" doesn't fit, emit
+    # the single top-priority line bare rather than nothing — at
+    # max_tokens=16 the most load-bearing known fact beats an empty context.
+    if not context.strip("#\n ") and sections:
+        for _header, items in sections:
+            for line, citation in items:
+                if approx_tokens(line) <= max_tokens:
+                    return line, ([citation] if citation else [])
+            break  # only the top tier; lower tiers are lower priority
+        return "", []
+
     if not context.strip("#\n "):
         return "", []
     return context, _dedupe_citations(citations)

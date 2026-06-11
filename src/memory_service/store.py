@@ -110,8 +110,15 @@ def write_turn(
         for op in memory_ops:
             try:
                 if op["action"] == "reinforce" and op.get("supersedes_id"):
+                    # Guarded: target must exist, belong to this owner, and be
+                    # active (reinforcing a superseded row would corrupt the
+                    # chain the eval inspects); confidence only ratchets up —
+                    # a low-confidence heuristic restatement must not erode a
+                    # high-confidence LLM fact.
                     conn.execute(
-                        "UPDATE memories SET updated_at=?, confidence=? WHERE id=? AND owner=?",
+                        "UPDATE memories SET updated_at=?,"
+                        " confidence=MAX(confidence, ?)"
+                        " WHERE id=? AND owner=? AND active=1",
                         (_now(), op["confidence"], op["supersedes_id"], owner),
                     )
                     continue
@@ -224,8 +231,11 @@ def get_memory(mem_id: str) -> dict[str, Any] | None:
 # ---------- deletes (eval cleanup) ----------
 
 def _repair_supersession(conn: Any, deleted_ids: set[str]) -> None:
-    """If a deleted memory superseded an older one, reactivate the older one
-    (unless it was itself deleted). Keeps chains consistent after cleanup."""
+    """Keep chains consistent after cleanup deletes, both directions:
+    - a survivor that was superseded BY a deleted memory is reactivated
+      (the contradiction that retired it no longer exists);
+    - a survivor whose `supersedes` points AT a deleted memory gets the
+      pointer nulled (no dangling ids in the inspectable chain)."""
     if not deleted_ids:
         return
     marks = ",".join("?" for _ in deleted_ids)
@@ -237,6 +247,10 @@ def _repair_supersession(conn: Any, deleted_ids: set[str]) -> None:
             "UPDATE memories SET active=1, superseded_by=NULL, updated_at=? WHERE id=?",
             (_now(), r["id"]),
         )
+    conn.execute(
+        f"UPDATE memories SET supersedes=NULL WHERE supersedes IN ({marks})",
+        tuple(deleted_ids),
+    )
 
 
 def delete_session(session_id: str) -> None:

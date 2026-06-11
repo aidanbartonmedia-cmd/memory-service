@@ -14,14 +14,19 @@ the core design choice: contradiction detection is a semantic problem
 problem, and the model is the only component that can see both sides at once.
 
 Fallback path (no API key / API down): a small rule-based extractor so the
-service keeps functioning, with reduced extraction quality. /turns never
-fails because extraction failed — the raw turn is always stored first.
+service keeps functioning, with reduced extraction quality. Extraction can
+never fail /turns: any extractor error degrades to the next tier (LLM ->
+heuristic -> summary-only), and the turn plus whatever was extracted are then
+persisted together in one transaction (store.write_turn).
 """
 
 from __future__ import annotations
 
 import logging
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -29,6 +34,18 @@ from pydantic import BaseModel, Field
 from . import config
 
 log = logging.getLogger("memory.extraction")
+
+_pool: ThreadPoolExecutor | None = None
+_pool_lock = threading.Lock()
+
+
+def _extraction_pool() -> ThreadPoolExecutor:
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                _pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="extract")
+    return _pool
 
 MemoryType = Literal["fact", "preference", "opinion", "event"]
 
@@ -115,35 +132,55 @@ def render_existing(memories: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _llm_extract_inner(
+    turn_text: str,
+    existing: list[dict[str, Any]],
+    timestamp: str,
+) -> ExtractionResult | None:
+    import anthropic
+
+    client = anthropic.Anthropic(
+        max_retries=config.LLM_MAX_RETRIES, timeout=config.LLM_TIMEOUT_S
+    )
+    prompt = (
+        f"EXISTING ACTIVE MEMORIES for this user:\n{render_existing(existing)}\n\n"
+        f"TURN (timestamp {timestamp}):\n{turn_text}"
+    )
+    response = client.messages.parse(
+        model=config.LLM_MODEL,
+        max_tokens=4000,
+        system=_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+        output_format=ExtractionResult,
+    )
+    result = response.parsed_output
+    if result is None:
+        log.warning("extraction parse returned no output (stop_reason=%s)", response.stop_reason)
+    return result
+
+
 def llm_extract(
     turn_text: str,
     existing: list[dict[str, Any]],
     timestamp: str,
 ) -> ExtractionResult | None:
-    """Returns None on any API failure; caller falls back to heuristics."""
+    """Returns None on any API failure or deadline; caller falls back.
+
+    The whole call runs under a hard wall-clock deadline
+    (EXTRACTION_DEADLINE_S, default 40s): the eval gives /turns 60 seconds
+    total, and SDK-level retries/timeouts compose multiplicatively (and a
+    429's retry-after sleep can exceed the per-attempt timeout entirely), so
+    a request-level deadline is the only bound that actually holds.
+    """
     if not config.ANTHROPIC_API_KEY:
         return None
     try:
-        import anthropic
-
-        client = anthropic.Anthropic(
-            max_retries=config.LLM_MAX_RETRIES, timeout=config.LLM_TIMEOUT_S
-        )
-        prompt = (
-            f"EXISTING ACTIVE MEMORIES for this user:\n{render_existing(existing)}\n\n"
-            f"TURN (timestamp {timestamp}):\n{turn_text}"
-        )
-        response = client.messages.parse(
-            model=config.LLM_MODEL,
-            max_tokens=4000,
-            system=_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
-            output_format=ExtractionResult,
-        )
-        result = response.parsed_output
-        if result is None:
-            log.warning("extraction parse returned no output (stop_reason=%s)", response.stop_reason)
-        return result
+        future = _extraction_pool().submit(_llm_extract_inner, turn_text, existing, timestamp)
+        return future.result(timeout=config.EXTRACTION_DEADLINE_S)
+    except FuturesTimeout:
+        log.error("LLM extraction exceeded %.0fs deadline; falling back to heuristics",
+                  config.EXTRACTION_DEADLINE_S)
+        return None
     except Exception:
         log.exception("LLM extraction failed; falling back to heuristics")
         return None
@@ -169,16 +206,22 @@ _HEURISTICS: list[tuple[re.Pattern[str], MemoryType, str, str]] = [
 
 
 def heuristic_extract(
-    turn_text: str,
+    messages: list[dict[str, Any]],
     existing: list[dict[str, Any]],
     timestamp: str,
 ) -> ExtractionResult:
-    """Rule-based degraded mode. Supersession = exact key collision."""
+    """Rule-based degraded mode. Supersession = exact key collision.
+
+    Works from the structured messages, never by re-parsing rendered text —
+    message content legally contains anything (newlines, lines starting with
+    "user", no colons), and a fallback extractor that can crash on valid
+    input is worse than no fallback (it used to: see CHANGELOG v0.7).
+    """
     by_key = {m["key"]: m for m in existing}
-    user_text = "\n".join(
-        line.split(":", 1)[1] for line in turn_text.splitlines()
-        if line.startswith("user")
-    ) or turn_text
+    user_texts = [str(m.get("content", "")) for m in messages if m.get("role") == "user"]
+    user_text = "\n".join(user_texts) or "\n".join(
+        str(m.get("content", "")) for m in messages
+    )
 
     out: list[ExtractedMemory] = []
     seen_keys: set[str] = set()
@@ -207,8 +250,8 @@ def heuristic_extract(
                 supersedes_id=prior["id"] if prior is not None else None,
             ))
 
-    first_user = next((line for line in turn_text.splitlines() if line.startswith("user")), turn_text)
-    summary = f"User discussed: {first_user.split(':', 1)[-1].strip()[:200]}"
+    first_user = (user_texts[0] if user_texts else user_text).strip()
+    summary = f"User discussed: {first_user[:200]}" if first_user else "Turn with no user text."
     return ExtractionResult(turn_summary=summary, memories=out)
 
 
@@ -217,9 +260,22 @@ def extract(
     existing: list[dict[str, Any]],
     timestamp: str,
 ) -> tuple[ExtractionResult, str]:
-    """Returns (result, mode) where mode is 'llm' or 'heuristic'."""
-    turn_text = render_turn(messages)
-    result = llm_extract(turn_text, existing, timestamp)
+    """Returns (result, mode) where mode is 'llm', 'heuristic', or 'minimal'.
+
+    Never raises: any extractor failure degrades one tier further. The
+    'minimal' tier stores the turn with a bare summary and no memories —
+    the turn itself must never be lost to an extraction bug.
+    """
+    result = llm_extract(render_turn(messages), existing, timestamp)
     if result is not None:
         return result, "llm"
-    return heuristic_extract(turn_text, existing, timestamp), "heuristic"
+    try:
+        return heuristic_extract(messages, existing, timestamp), "heuristic"
+    except Exception:
+        log.exception("heuristic extraction failed; storing turn with minimal summary")
+        first = next((str(m.get("content", ""))[:200] for m in messages
+                      if m.get("role") == "user"), "")
+        return ExtractionResult(
+            turn_summary=f"User discussed: {first}" if first else "Conversation turn.",
+            memories=[],
+        ), "minimal"

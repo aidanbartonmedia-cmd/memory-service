@@ -1,0 +1,537 @@
+{
+  "label": "v0.7b",
+  "timestamp": "20260611T163511Z",
+  "score": 0.875,
+  "passed": 28,
+  "total": 32,
+  "recall_latency_ms": {
+    "p50": 5.0,
+    "p95": 12.5
+  },
+  "ingest_seconds": null,
+  "by_category": {
+    "fact_evolution": "4/4",
+    "multi_hop": "2/2",
+    "keyword": "2/2",
+    "implicit": "2/2",
+    "correction": "1/1",
+    "preference": "3/3",
+    "recall": "5/5",
+    "opinion_arc": "1/1",
+    "noise": "4/8",
+    "cold_session": "1/1",
+    "paraphrase": "3/3"
+  },
+  "results": [
+    {
+      "id": "p01",
+      "category": "fact_evolution",
+      "query": "Where does the user work right now?",
+      "latency_ms": 256.4,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "history_in_context",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "superseded_memory_exists",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Works at Notion as a product manager (updated 2026-06-11; previously: Works at Stripe as a backend engineer)\n- Lives in Denver (updated 2026-06-11)\n- Has a dog named Biscuit (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Started a new role at Notion as a product manager the week of 2025-04-05, switching from backend engineering\n- [2026-06-11] Signing a lease in Denver the week of 2025-02-20\n\n## Relevant from recent conversations\n- [2025-01-10] User asked about making TypeScript's noImplicitAny work with legacy JS imports, after walking their dog Biscuit who chewed through his leash that morning.\n- [2025-04-05] User announced they just started at Notion this week as a product manager, switching from a backend engineering career, and mentioned Biscuit approves of the home office setup.\n- [2025-01-10] User asked about TypeScript tsconfig strict mode, mentioning they are a backend engineer at Stripe where strict mode is used everywhere.\n- [2025-02-20] User is moving to Denver and signing a lease next week, asking for tips on finding dog-friendly apartments for their dog Biscuit."
+    },
+    {
+      "id": "p02",
+      "category": "fact_evolution",
+      "query": "What is the user's job title or role?",
+      "latency_ms": 5.2,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Works at Notion as a product manager (updated 2026-06-11; previously: Works at Stripe as a backend engineer)\n- Lives in Denver (updated 2026-06-11)\n- Has a dog named Biscuit (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Started a new role at Notion as a product manager the week of 2025-04-05, switching from backend engineering\n- [2026-06-11] Signing a lease in Denver the week of 2025-02-20\n\n## Relevant from recent conversations\n- [2025-04-05] User announced they just started at Notion this week as a product manager, switching from a backend engineering career, and mentioned Biscuit approves of the home office setup.\n- [2025-01-10] User asked about TypeScript tsconfig strict mode, mentioning they are a backend engineer at Stripe where strict mode is used everywhere.\n- [2025-01-10] User asked about making TypeScript's noImplicitAny work with legacy JS imports, after walking their dog Biscuit who chewed through his leash that morning.\n- [2025-02-20] User is moving to Denver and signing a lease next week, asking for tips on finding dog-friendly apartments for their dog Biscuit."
+    },
+    {
+      "id": "p03",
+      "category": "multi_hop",
+      "query": "What city does the user with the dog named Biscuit live in?",
+      "latency_ms": 5.3,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Has a dog named Biscuit (updated 2026-06-11)\n- Lives in Denver (updated 2026-06-11)\n- Works at Notion as a product manager (updated 2026-06-11; previously: Works at Stripe as a backend engineer)\n\n## Relevant memories\n- [2026-06-11] Signing a lease in Denver the week of 2025-02-20\n- [2026-06-11] Started a new role at Notion as a product manager the week of 2025-04-05, switching from backend engineering\n\n## Relevant from recent conversations\n- [2025-02-20] User is moving to Denver and signing a lease next week, asking for tips on finding dog-friendly apartments for their dog Biscuit.\n- [2025-01-10] User asked about making TypeScript's noImplicitAny work with legacy JS imports, after walking their dog Biscuit who chewed through his leash that morning.\n- [2025-04-05] User announced they just started at Notion this week as a product manager, switching from a backend engineering career, and mentioned Biscuit approves of the home office setup.\n- [2025-01-10] User asked about TypeScript tsconfig strict mode, mentioning they are a backend engineer at Stripe where strict mode is used everywhere."
+    },
+    {
+      "id": "p04",
+      "category": "keyword",
+      "query": "What's their dog's name?",
+      "latency_ms": 4.9,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Has a dog named Biscuit (updated 2026-06-11)\n- Works at Notion as a product manager (updated 2026-06-11; previously: Works at Stripe as a backend engineer)\n- Lives in Denver (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Started a new role at Notion as a product manager the week of 2025-04-05, switching from backend engineering\n- [2026-06-11] Signing a lease in Denver the week of 2025-02-20\n\n## Relevant from recent conversations\n- [2025-01-10] User asked about making TypeScript's noImplicitAny work with legacy JS imports, after walking their dog Biscuit who chewed through his leash that morning.\n- [2025-02-20] User is moving to Denver and signing a lease next week, asking for tips on finding dog-friendly apartments for their dog Biscuit.\n- [2025-04-05] User announced they just started at Notion this week as a product manager, switching from a backend engineering career, and mentioned Biscuit approves of the home office setup.\n- [2025-01-10] User asked about TypeScript tsconfig strict mode, mentioning they are a backend engineer at Stripe where strict mode is used everywhere."
+    },
+    {
+      "id": "p05",
+      "category": "implicit",
+      "query": "Does the user have any pets?",
+      "latency_ms": 5.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Has a dog named Biscuit (updated 2026-06-11)\n- Works at Notion as a product manager (updated 2026-06-11; previously: Works at Stripe as a backend engineer)\n- Lives in Denver (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Started a new role at Notion as a product manager the week of 2025-04-05, switching from backend engineering\n- [2026-06-11] Signing a lease in Denver the week of 2025-02-20\n\n## Relevant from recent conversations\n- [2025-02-20] User is moving to Denver and signing a lease next week, asking for tips on finding dog-friendly apartments for their dog Biscuit.\n- [2025-01-10] User asked about making TypeScript's noImplicitAny work with legacy JS imports, after walking their dog Biscuit who chewed through his leash that morning.\n- [2025-01-10] User asked about TypeScript tsconfig strict mode, mentioning they are a backend engineer at Stripe where strict mode is used everywhere.\n- [2025-04-05] User announced they just started at Notion this week as a product manager, switching from a backend engineering career, and mentioned Biscuit approves of the home office setup."
+    },
+    {
+      "id": "p06",
+      "category": "fact_evolution",
+      "query": "Where does the user live?",
+      "latency_ms": 4.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Lives in Denver (updated 2026-06-11)\n- Works at Notion as a product manager (updated 2026-06-11; previously: Works at Stripe as a backend engineer)\n- Has a dog named Biscuit (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Started a new role at Notion as a product manager the week of 2025-04-05, switching from backend engineering\n- [2026-06-11] Signing a lease in Denver the week of 2025-02-20\n\n## Relevant from recent conversations\n- [2025-02-20] User is moving to Denver and signing a lease next week, asking for tips on finding dog-friendly apartments for their dog Biscuit.\n- [2025-01-10] User asked about TypeScript tsconfig strict mode, mentioning they are a backend engineer at Stripe where strict mode is used everywhere.\n- [2025-04-05] User announced they just started at Notion this week as a product manager, switching from a backend engineering career, and mentioned Biscuit approves of the home office setup.\n- [2025-01-10] User asked about making TypeScript's noImplicitAny work with legacy JS imports, after walking their dog Biscuit who chewed through his leash that morning."
+    },
+    {
+      "id": "p07",
+      "category": "correction",
+      "query": "What food allergies does the user have?",
+      "latency_ms": 4.6,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "not_active_memory",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Allergic to shellfish (updated 2026-06-11)\n- Works as a freelance photographer (updated 2026-06-11)\n- Lives in Lisbon (updated 2026-06-11)\n- Has a daughter who plays violin (updated 2026-06-11)\n- Thai food is the user's favorite cuisine (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] User's daughter has a violin recital on the evening of 2025-03-01\n\n## Relevant from recent conversations\n- [2025-03-01] User asked for help planning a Thai dinner party menu for six guests, noting a shellfish allergy (corrected from a misspoken peanut allergy) and that Thai is their favorite cuisine.\n- [2025-03-01] User mentioned their daughter has a violin recital in the evening, so dinner needs to start late around 8pm.\n- [2025-03-15] User, a freelance photographer based in Lisbon, asked for help writing a wedding shoot client contract on 2025-03-15."
+    },
+    {
+      "id": "p08",
+      "category": "preference",
+      "query": "What kind of food does the user like?",
+      "latency_ms": 4.8,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Allergic to shellfish (updated 2026-06-11)\n- Lives in Lisbon (updated 2026-06-11)\n- Works as a freelance photographer (updated 2026-06-11)\n- Has a daughter who plays violin (updated 2026-06-11)\n- Thai food is the user's favorite cuisine (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] User's daughter has a violin recital on the evening of 2025-03-01\n\n## Relevant from recent conversations\n- [2025-03-01] User asked for help planning a Thai dinner party menu for six guests, noting a shellfish allergy (corrected from a misspoken peanut allergy) and that Thai is their favorite cuisine.\n- [2025-03-01] User mentioned their daughter has a violin recital in the evening, so dinner needs to start late around 8pm.\n- [2025-03-15] User, a freelance photographer based in Lisbon, asked for help writing a wedding shoot client contract on 2025-03-15."
+    },
+    {
+      "id": "p09",
+      "category": "implicit",
+      "query": "Does the user have children?",
+      "latency_ms": 3.7,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Has a daughter who plays violin (updated 2026-06-11)\n- Works as a freelance photographer (updated 2026-06-11)\n- Lives in Lisbon (updated 2026-06-11)\n- Allergic to shellfish (updated 2026-06-11)\n- Thai food is the user's favorite cuisine (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] User's daughter has a violin recital on the evening of 2025-03-01\n\n## Relevant from recent conversations\n- [2025-03-15] User, a freelance photographer based in Lisbon, asked for help writing a wedding shoot client contract on 2025-03-15.\n- [2025-03-01] User mentioned their daughter has a violin recital in the evening, so dinner needs to start late around 8pm.\n- [2025-03-01] User asked for help planning a Thai dinner party menu for six guests, noting a shellfish allergy (corrected from a misspoken peanut allergy) and that Thai is their favorite cuisine."
+    },
+    {
+      "id": "p10",
+      "category": "recall",
+      "query": "What does the user do for a living and where are they based?",
+      "latency_ms": 5.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "expect_all",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Lives in Lisbon (updated 2026-06-11)\n- Works as a freelance photographer (updated 2026-06-11)\n- Has a daughter who plays violin (updated 2026-06-11)\n- Allergic to shellfish (updated 2026-06-11)\n- Thai food is the user's favorite cuisine (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] User's daughter has a violin recital on the evening of 2025-03-01\n\n## Relevant from recent conversations\n- [2025-03-15] User, a freelance photographer based in Lisbon, asked for help writing a wedding shoot client contract on 2025-03-15.\n- [2025-03-01] User mentioned their daughter has a violin recital in the evening, so dinner needs to start late around 8pm.\n- [2025-03-01] User asked for help planning a Thai dinner party menu for six guests, noting a shellfish allergy (corrected from a misspoken peanut allergy) and that Thai is their favorite cuisine."
+    },
+    {
+      "id": "p11",
+      "category": "opinion_arc",
+      "query": "How does the user feel about TypeScript?",
+      "latency_ms": 4.8,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Prefers very short answers, with bullet points over paragraphs (updated 2026-06-11)\n- Believes TypeScript is the right tool for big team projects, but prefers Python for quick scripts \u2014 right tool for the job (updated 2026-06-11; previously: Has mixed feelings about TypeScript; appreciates the type system but finds advanced generics like conditional types with)\n\n## Relevant memories\n- [2026-06-11] Migrating their startup's entire codebase to TypeScript\n\n## Relevant from recent conversations\n- [2025-03-12] User expressed frustration with TypeScript generics, conditional types, and infer, saying they're starting to have mixed feelings about the language.\n- [2025-01-05] User expressed strong love for TypeScript's type system for catching bugs and is migrating their startup's entire codebase to it.\n- [2025-05-20] User settled on a pragmatic stance that TypeScript is good for big team projects while preferring Python for quick scripts, and requested short bullet-point answers."
+    },
+    {
+      "id": "p12",
+      "category": "preference",
+      "query": "How should I format my answers for this user?",
+      "latency_ms": 4.6,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Prefers very short answers, with bullet points over paragraphs (updated 2026-06-11)\n- Believes TypeScript is the right tool for big team projects, but prefers Python for quick scripts \u2014 right tool for the job (updated 2026-06-11; previously: Has mixed feelings about TypeScript; appreciates the type system but finds advanced generics like conditional types with)\n\n## Relevant memories\n- [2026-06-11] Migrating their startup's entire codebase to TypeScript\n\n## Relevant from recent conversations\n- [2025-05-20] User settled on a pragmatic stance that TypeScript is good for big team projects while preferring Python for quick scripts, and requested short bullet-point answers.\n- [2025-03-12] User expressed frustration with TypeScript generics, conditional types, and infer, saying they're starting to have mixed feelings about the language.\n- [2025-01-05] User expressed strong love for TypeScript's type system for catching bugs and is migrating their startup's entire codebase to it."
+    },
+    {
+      "id": "p13",
+      "category": "fact_evolution",
+      "query": "Where does this user live?",
+      "latency_ms": 4.2,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "history_in_context",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "superseded_memory_exists",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Lives in Berlin (updated 2026-06-11; previously: Lives in New York City)\n- Works at a music tech startup in Berlin (updated 2026-06-11)\n- Has a tiny kitchen with only one burner (updated 2026-06-11)\n- Is vegetarian (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Moved from NYC to Berlin in May 2025\n\n## Relevant from recent conversations\n- [2025-02-01] User asked for vegetarian meal-prep ideas suited to a tiny one-burner NYC kitchen.\n- [2025-06-10] User mentioned moving to Berlin from NYC last month for a new job at a music tech startup and asked where to find good vegetarian d\u00f6ner.\n- [2025-02-01] User asked the assistant to check tomorrow's weather in New York for a planned run, which showed light snow and a high of 38\u00b0F."
+    },
+    {
+      "id": "p14",
+      "category": "preference",
+      "query": "Any dietary preferences I should know about for restaurant suggestions?",
+      "latency_ms": 4.8,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Lives in Berlin (updated 2026-06-11; previously: Lives in New York City)\n- Has a tiny kitchen with only one burner (updated 2026-06-11)\n- Works at a music tech startup in Berlin (updated 2026-06-11)\n- Is vegetarian (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Moved from NYC to Berlin in May 2025\n\n## Relevant from recent conversations\n- [2025-02-01] User asked for vegetarian meal-prep ideas suited to a tiny one-burner NYC kitchen.\n- [2025-06-10] User mentioned moving to Berlin from NYC last month for a new job at a music tech startup and asked where to find good vegetarian d\u00f6ner.\n- [2025-02-01] User asked the assistant to check tomorrow's weather in New York for a planned run, which showed light snow and a high of 38\u00b0F."
+    },
+    {
+      "id": "p15",
+      "category": "recall",
+      "query": "What industry does the user work in?",
+      "latency_ms": 4.3,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Works at a music tech startup in Berlin (updated 2026-06-11)\n- Lives in Berlin (updated 2026-06-11; previously: Lives in New York City)\n- Has a tiny kitchen with only one burner (updated 2026-06-11)\n- Is vegetarian (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Moved from NYC to Berlin in May 2025\n\n## Relevant from recent conversations\n- [2025-02-01] User asked for vegetarian meal-prep ideas suited to a tiny one-burner NYC kitchen.\n- [2025-06-10] User mentioned moving to Berlin from NYC last month for a new job at a music tech startup and asked where to find good vegetarian d\u00f6ner.\n- [2025-02-01] User asked the assistant to check tomorrow's weather in New York for a planned run, which showed light snow and a high of 38\u00b0F."
+    },
+    {
+      "id": "p16",
+      "category": "recall",
+      "query": "What was the user debugging recently?",
+      "latency_ms": 4.4,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant memories\n- [2026-06-11] Has a system design interview at a big tech company in late April 2025 (around the week of 2025-04-29)\n\n## Relevant from recent conversations\n- [2025-04-22] User debugged a React dashboard with excessive re-renders caused by a context provider issue, and mentioned prepping for a system design interview at a big tech company next week."
+    },
+    {
+      "id": "p17",
+      "category": "recall",
+      "query": "What is the user preparing for?",
+      "latency_ms": 3.9,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant memories\n- [2026-06-11] Has a system design interview at a big tech company in late April 2025 (around the week of 2025-04-29)\n\n## Relevant from recent conversations\n- [2025-04-22] User debugged a React dashboard with excessive re-renders caused by a context provider issue, and mentioned prepping for a system design interview at a big tech company next week."
+    },
+    {
+      "id": "p18",
+      "category": "noise",
+      "query": "What's the user's favorite soccer team?",
+      "latency_ms": 6.3,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": true,
+          "detail": "context='' citations=0"
+        }
+      ],
+      "passed": true,
+      "context": ""
+    },
+    {
+      "id": "p19",
+      "category": "noise",
+      "query": "What car does the user drive?",
+      "latency_ms": 4.6,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": true,
+          "detail": "context='' citations=0"
+        }
+      ],
+      "passed": true,
+      "context": ""
+    },
+    {
+      "id": "p20",
+      "category": "noise",
+      "query": "Tell me about the user's wedding plans.",
+      "latency_ms": 9.0,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": false,
+          "detail": "context='## Known facts about this user\\n- Prefers very short answers, with bullet points over paragraphs (updated 2026-06-11)\\n- B' citations=3"
+        }
+      ],
+      "passed": false,
+      "context": "## Known facts about this user\n- Prefers very short answers, with bullet points over paragraphs (updated 2026-06-11)\n- Believes TypeScript is the right tool for big team projects, but prefers Python for quick scripts \u2014 right tool for the job (updated 2026-06-11; previously: Has mixed feelings about TypeScript; appreciates the type system but finds advanced generics like conditional types with)\n\n## Relevant memories\n- [2026-06-11] Migrating their startup's entire codebase to TypeScript\n\n## Relevant from recent conversations\n- [2025-05-20] User settled on a pragmatic stance that TypeScript is good for big team projects while preferring Python for quick scripts, and requested short bullet-point answers.\n- [2025-03-12] User expressed frustration with TypeScript generics, conditional types, and infer, saying they're starting to have mixed feelings about the language.\n- [2025-01-05] User expressed strong love for TypeScript's type system for catching bugs and is migrating their startup's entire codebase to it."
+    },
+    {
+      "id": "p21",
+      "category": "cold_session",
+      "query": "What do you know about this user?",
+      "latency_ms": 4.2,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": true,
+          "detail": "context='' citations=0"
+        }
+      ],
+      "passed": true,
+      "context": ""
+    },
+    {
+      "id": "p22",
+      "category": "keyword",
+      "query": "When is the violin recital?",
+      "latency_ms": 7.1,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Has a daughter who plays violin (updated 2026-06-11)\n- Lives in Lisbon (updated 2026-06-11)\n- Works as a freelance photographer (updated 2026-06-11)\n- Allergic to shellfish (updated 2026-06-11)\n- Thai food is the user's favorite cuisine (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] User's daughter has a violin recital on the evening of 2025-03-01\n\n## Relevant from recent conversations\n- [2025-03-01] User mentioned their daughter has a violin recital in the evening, so dinner needs to start late around 8pm.\n- [2025-03-15] User, a freelance photographer based in Lisbon, asked for help writing a wedding shoot client contract on 2025-03-15.\n- [2025-03-01] User asked for help planning a Thai dinner party menu for six guests, noting a shellfish allergy (corrected from a misspoken peanut allergy) and that Thai is their favorite cuisine."
+    },
+    {
+      "id": "p23",
+      "category": "multi_hop",
+      "query": "Which city did the photographer user move his dinner party planning expertise to?",
+      "latency_ms": 6.6,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Works as a freelance photographer (updated 2026-06-11)\n- Lives in Lisbon (updated 2026-06-11)\n- Has a daughter who plays violin (updated 2026-06-11)\n- Allergic to shellfish (updated 2026-06-11)\n- Thai food is the user's favorite cuisine (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] User's daughter has a violin recital on the evening of 2025-03-01\n\n## Relevant from recent conversations\n- [2025-03-01] User asked for help planning a Thai dinner party menu for six guests, noting a shellfish allergy (corrected from a misspoken peanut allergy) and that Thai is their favorite cuisine.\n- [2025-03-15] User, a freelance photographer based in Lisbon, asked for help writing a wedding shoot client contract on 2025-03-15.\n- [2025-03-01] User mentioned their daughter has a violin recital in the evening, so dinner needs to start late around 8pm."
+    },
+    {
+      "id": "p24",
+      "category": "recall",
+      "query": "What pet-related mishap did the user mention?",
+      "latency_ms": 5.5,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Has a dog named Biscuit (updated 2026-06-11)\n- Works at Notion as a product manager (updated 2026-06-11; previously: Works at Stripe as a backend engineer)\n- Lives in Denver (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Started a new role at Notion as a product manager the week of 2025-04-05, switching from backend engineering\n- [2026-06-11] Signing a lease in Denver the week of 2025-02-20\n\n## Relevant from recent conversations\n- [2025-02-20] User is moving to Denver and signing a lease next week, asking for tips on finding dog-friendly apartments for their dog Biscuit.\n- [2025-01-10] User asked about TypeScript tsconfig strict mode, mentioning they are a backend engineer at Stripe where strict mode is used everywhere.\n- [2025-04-05] User announced they just started at Notion this week as a product manager, switching from a backend engineering career, and mentioned Biscuit approves of the home office setup.\n- [2025-01-10] User asked about making TypeScript's noImplicitAny work with legacy JS imports, after walking their dog Biscuit who chewed through his leash that morning."
+    },
+    {
+      "id": "p25",
+      "category": "noise",
+      "query": "Tell me about the user's wedding plans.",
+      "latency_ms": 8.6,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": false,
+          "detail": "context='## Known facts about this user\\n- Lives in Denver (updated 2026-06-11)\\n- Works at Notion as a product manager (updated 20' citations=4"
+        }
+      ],
+      "passed": false,
+      "context": "## Known facts about this user\n- Lives in Denver (updated 2026-06-11)\n- Works at Notion as a product manager (updated 2026-06-11; previously: Works at Stripe as a backend engineer)\n- Has a dog named Biscuit (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Started a new role at Notion as a product manager the week of 2025-04-05, switching from backend engineering\n- [2026-06-11] Signing a lease in Denver the week of 2025-02-20\n\n## Relevant from recent conversations\n- [2025-02-20] User is moving to Denver and signing a lease next week, asking for tips on finding dog-friendly apartments for their dog Biscuit.\n- [2025-01-10] User asked about TypeScript tsconfig strict mode, mentioning they are a backend engineer at Stripe where strict mode is used everywhere.\n- [2025-04-05] User announced they just started at Notion this week as a product manager, switching from a backend engineering career, and mentioned Biscuit approves of the home office setup.\n- [2025-01-10] User asked about making TypeScript's noImplicitAny work with legacy JS imports, after walking their dog Biscuit who chewed through his leash that morning."
+    },
+    {
+      "id": "p26",
+      "category": "noise",
+      "query": "Tell me about the user's wedding plans.",
+      "latency_ms": 8.9,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": false,
+          "detail": "context='## Known facts about this user\\n- Lives in Berlin (updated 2026-06-11; previously: Lives in New York City)\\n- Has a tiny k' citations=3"
+        }
+      ],
+      "passed": false,
+      "context": "## Known facts about this user\n- Lives in Berlin (updated 2026-06-11; previously: Lives in New York City)\n- Has a tiny kitchen with only one burner (updated 2026-06-11)\n- Works at a music tech startup in Berlin (updated 2026-06-11)\n- Is vegetarian (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Moved from NYC to Berlin in May 2025\n\n## Relevant from recent conversations\n- [2025-02-01] User asked the assistant to check tomorrow's weather in New York for a planned run, which showed light snow and a high of 38\u00b0F.\n- [2025-06-10] User mentioned moving to Berlin from NYC last month for a new job at a music tech startup and asked where to find good vegetarian d\u00f6ner.\n- [2025-02-01] User asked for vegetarian meal-prep ideas suited to a tiny one-burner NYC kitchen."
+    },
+    {
+      "id": "p27",
+      "category": "noise",
+      "query": "What's the user's favorite soccer team?",
+      "latency_ms": 4.9,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": true,
+          "detail": "context='' citations=0"
+        }
+      ],
+      "passed": true,
+      "context": ""
+    },
+    {
+      "id": "p28",
+      "category": "noise",
+      "query": "What's the user's favorite movie?",
+      "latency_ms": 9.9,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": false,
+          "detail": "context='## Known facts about this user\\n- Lives in Lisbon (updated 2026-06-11)\\n- Has a daughter who plays violin (updated 2026-06' citations=3"
+        }
+      ],
+      "passed": false,
+      "context": "## Known facts about this user\n- Lives in Lisbon (updated 2026-06-11)\n- Has a daughter who plays violin (updated 2026-06-11)\n- Works as a freelance photographer (updated 2026-06-11)\n- Allergic to shellfish (updated 2026-06-11)\n- Thai food is the user's favorite cuisine (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] User's daughter has a violin recital on the evening of 2025-03-01\n\n## Relevant from recent conversations\n- [2025-03-01] User asked for help planning a Thai dinner party menu for six guests, noting a shellfish allergy (corrected from a misspoken peanut allergy) and that Thai is their favorite cuisine.\n- [2025-03-15] User, a freelance photographer based in Lisbon, asked for help writing a wedding shoot client contract on 2025-03-15.\n- [2025-03-01] User mentioned their daughter has a violin recital in the evening, so dinner needs to start late around 8pm."
+    },
+    {
+      "id": "p29",
+      "category": "noise",
+      "query": "Does the user play any musical instruments?",
+      "latency_ms": 4.6,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": true,
+          "detail": "context='' citations=0"
+        }
+      ],
+      "passed": true,
+      "context": ""
+    },
+    {
+      "id": "p30",
+      "category": "paraphrase",
+      "query": "What should I avoid cooking for them at dinner?",
+      "latency_ms": 11.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Allergic to shellfish (updated 2026-06-11)\n- Has a daughter who plays violin (updated 2026-06-11)\n- Lives in Lisbon (updated 2026-06-11)\n- Works as a freelance photographer (updated 2026-06-11)\n- Thai food is the user's favorite cuisine (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] User's daughter has a violin recital on the evening of 2025-03-01\n\n## Relevant from recent conversations\n- [2025-03-01] User mentioned their daughter has a violin recital in the evening, so dinner needs to start late around 8pm.\n- [2025-03-01] User asked for help planning a Thai dinner party menu for six guests, noting a shellfish allergy (corrected from a misspoken peanut allergy) and that Thai is their favorite cuisine.\n- [2025-03-15] User, a freelance photographer based in Lisbon, asked for help writing a wedding shoot client contract on 2025-03-15."
+    },
+    {
+      "id": "p31",
+      "category": "paraphrase",
+      "query": "What does this person do to pay the bills?",
+      "latency_ms": 10.4,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Works as a freelance photographer (updated 2026-06-11)\n- Has a daughter who plays violin (updated 2026-06-11)\n- Lives in Lisbon (updated 2026-06-11)\n- Allergic to shellfish (updated 2026-06-11)\n- Thai food is the user's favorite cuisine (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] User's daughter has a violin recital on the evening of 2025-03-01\n\n## Relevant from recent conversations\n- [2025-03-15] User, a freelance photographer based in Lisbon, asked for help writing a wedding shoot client contract on 2025-03-15.\n- [2025-03-01] User mentioned their daughter has a violin recital in the evening, so dinner needs to start late around 8pm.\n- [2025-03-01] User asked for help planning a Thai dinner party menu for six guests, noting a shellfish allergy (corrected from a misspoken peanut allergy) and that Thai is their favorite cuisine."
+    },
+    {
+      "id": "p32",
+      "category": "paraphrase",
+      "query": "Which company pays their salary these days?",
+      "latency_ms": 12.5,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Known facts about this user\n- Works at Notion as a product manager (updated 2026-06-11; previously: Works at Stripe as a backend engineer)\n- Has a dog named Biscuit (updated 2026-06-11)\n- Lives in Denver (updated 2026-06-11)\n\n## Relevant memories\n- [2026-06-11] Started a new role at Notion as a product manager the week of 2025-04-05, switching from backend engineering\n- [2026-06-11] Signing a lease in Denver the week of 2025-02-20\n\n## Relevant from recent conversations\n- [2025-04-05] User announced they just started at Notion this week as a product manager, switching from a backend engineering career, and mentioned Biscuit approves of the home office setup.\n- [2025-01-10] User asked about TypeScript tsconfig strict mode, mentioning they are a backend engineer at Stripe where strict mode is used everywhere.\n- [2025-01-10] User asked about making TypeScript's noImplicitAny work with legacy JS imports, after walking their dog Biscuit who chewed through his leash that morning.\n- [2025-02-20] User is moving to Denver and signing a lease next week, asking for tips on finding dog-friendly apartments for their dog Biscuit."
+    }
+  ]
+}

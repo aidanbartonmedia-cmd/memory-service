@@ -37,13 +37,17 @@ _STOPWORDS = frozenset(
 
 def fts_query(query: str) -> str | None:
     """Sanitize arbitrary text into a safe OR-of-content-terms FTS5 query."""
-    terms = [t for t in _TOKEN_RE.findall(query) if t.lower() not in _STOPWORDS]
+    terms = []
+    for t in _TOKEN_RE.findall(query):
+        low = _normalize_token(t)
+        if low and low not in _STOPWORDS and low not in terms:
+            terms.append(low)
     if not terms:
         return None
     return " OR ".join(f'"{t}"' for t in terms[:32])
 
 
-def _bm25_candidates(fts_table: str, q: str, conn, cap: int = 400) -> dict[str, float]:
+def _bm25_candidates(fts_table: str, q: str, conn, cap: int = 2000) -> dict[str, float]:
     """Raw FTS matches as {doc_id: best_negated_bm25}. bm25() can only be
     evaluated when the FTS table drives the query (SQLite flattens subqueries
     and then rejects it), so we rank here and join ownership in Python."""
@@ -195,26 +199,107 @@ def entity_expand(owner: str, mem_ranked: list[tuple[str, float]], *, top_n: int
     return expanded
 
 
-def _relevance_gate(diag: dict[str, Any]) -> bool:
+# Frame words carry the *shape* of a question, not its topic ("what's their
+# favorite X", "tell me about their X plans"). They embed close to anything
+# sharing the frame — "favorite movie" lands on "favorite cuisine" through
+# the word favorite alone — so they are excluded from gate evidence terms.
+# Gate-only: retrieval ranking still sees them.
+_FRAME_TERMS = frozenset(
+    "name names favorite favourite plan plans planning kind kinds type types "
+    "thing things stuff way ways info information details detail status "
+    "situation person people someone anyone day days time times week weeks "
+    "month months year years today currently".split()
+)
+
+
+def _normalize_token(token: str) -> str:
+    """Lowercase and strip possessives: \"user's\" must reduce to the
+    stopword \"user\", not survive as a high-similarity pseudo-content term."""
+    low = token.lower()
+    for suffix in ("'s", "'"):
+        if low.endswith(suffix):
+            low = low[: -len(suffix)]
+    return low
+
+
+def _content_terms(query: str, cap: int = 6) -> list[str]:
+    terms = []
+    for t in _TOKEN_RE.findall(query):
+        low = _normalize_token(t)
+        if low in _STOPWORDS or low in _FRAME_TERMS or len(low) < 2:
+            continue
+        if low not in terms:
+            terms.append(low)
+    return terms[:cap]
+
+
+def _item_embedding(item_id: str) -> Any:
+    with db.tx() as conn:
+        table = "memories" if item_id.startswith("mem_") else "turns"
+        row = conn.execute(f"SELECT embedding FROM {table} WHERE id=?", (item_id,)).fetchone()
+    return embeddings.from_blob(row["embedding"]) if row and row["embedding"] else None
+
+
+def _relevance_gate(
+    diag: dict[str, Any],
+    bm25_ids: set[str],
+    query: str,
+) -> bool:
     """Decide whether anything in the store is actually about this query.
 
-    Calibrated on the fixture probes (see CHANGELOG v0.4): the hardest noise
-    probe peaks at dense 0.585 while the weakest real probe sits at 0.592 —
-    too close for a single floor. Two-tier rule instead:
-      - dense >= DENSE_FLOOR (0.62): semantically close, relevant on its own
-      - DENSE_FLOOR_LOW (0.50) <= dense < 0.62: ambiguous zone — require a
-        stemmed-keyword (BM25) hit to confirm
-      - dense < 0.50: noise, regardless of keyword collisions
+    Rule A — an item whose dense sim >= DENSE_FLOOR (0.62) is evidence on
+    its own.
+
+    Rule B — the ambiguous zone [DENSE_FLOOR_LOW=0.50, 0.62) needs topical
+    confirmation: holistic sims of genuinely-related paraphrases and
+    flat/frame-matched noise fully overlap in this band (CHANGELOG v0.7
+    measured both at 0.55-0.59), so the zone item must additionally show
+    *term-level support*: some content term of the query, embedded alone,
+    must hit TERM_FLOOR (0.52) cosine against that same item. On the fixture
+    this separates cleanly — noise topical terms ("wedding", "movie",
+    "soccer") top out at 0.478 against their best zone item, while signal
+    terms ("dinner", "pay", "salary", "live") bottom at 0.535. Frame words
+    ("favorite", "plans") are excluded from evidence terms — they are why
+    the noise items scored high holistically in the first place.
+
+    Earlier forms and why they died (CHANGELOG v0.4/v0.7): one global floor
+    (margins of 0.007), global dense + any keyword hit (one item supplied
+    the score, another the keyword), per-item dense + stemmed keyword (the
+    keyword that confirms is the frame word itself: "plans" -> "planning a
+    move").
+
     If embeddings are unavailable (degraded mode), fall back to BM25-only
     evidence — weaker noise resistance, documented in README.
     """
-    max_dense = max(diag["max_dense_memory"], diag["max_dense_turn"])
-    keyword_hits = diag["bm25_memory_hits"] + diag["bm25_turn_hits"]
-    if diag.get("dense_available", True):
-        if max_dense >= config.DENSE_FLOOR:
+    if not diag.get("dense_available", True):
+        return bool(bm25_ids)
+
+    zone: list[tuple[str, float]] = []
+    for sims in (diag["dense_memory"], diag["dense_turn"]):
+        for item_id, sim in sims.items():
+            if sim >= config.DENSE_FLOOR:
+                return True
+            if sim >= config.DENSE_FLOOR_LOW:
+                zone.append((item_id, sim))
+
+    if not zone:
+        return False
+    terms = _content_terms(query)
+    if not terms:
+        # Nothing but stopwords/frame words ("tell me things") — treat the
+        # zone presence itself as weak-but-sufficient evidence.
+        return True
+    term_vecs = [v for v in (embeddings.embed_query(t) for t in terms) if v is not None]
+    if not term_vecs:
+        return True
+    for item_id, _sim in sorted(zone, key=lambda x: -x[1])[:5]:
+        item_vec = _item_embedding(item_id)
+        if item_vec is None:
+            continue
+        support = max(float(tv @ item_vec) for tv in term_vecs)
+        if support >= config.TERM_FLOOR:
             return True
-        return max_dense >= config.DENSE_FLOOR_LOW and keyword_hits > 0
-    return keyword_hits > 0
+    return False
 
 
 def retrieve(owner: str | None, query: str, *, limit: int = 12) -> dict[str, Any]:
@@ -244,9 +329,12 @@ def retrieve(owner: str | None, query: str, *, limit: int = 12) -> dict[str, Any
         "dense_memory": dict(dn_m),
         "dense_turn": dict(dn_t),
     }
+    bm25_ids = {i for i, _ in bm_m} | {i for i, _ in bm_t}
     return {
         "memories": mem_ranked,
         "turns": turn_ranked,
-        "relevant": _relevance_gate(diagnostics) if query.strip() else True,
+        # An empty query is a deliberate "give me the standing context" —
+        # the profile is the right answer, so it bypasses the gate.
+        "relevant": _relevance_gate(diagnostics, bm25_ids, query) if query.strip() else True,
         "diagnostics": diagnostics,
     }

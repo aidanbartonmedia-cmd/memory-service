@@ -1,0 +1,363 @@
+{
+  "label": "v0.1",
+  "timestamp": "20260611T032747Z",
+  "score": 0.041666666666666664,
+  "passed": 1,
+  "total": 24,
+  "recall_latency_ms": {
+    "p50": 3.4,
+    "p95": 3.9
+  },
+  "ingest_seconds": 0.02177950000623241,
+  "by_category": {
+    "fact_evolution": "0/4",
+    "multi_hop": "0/2",
+    "keyword": "0/2",
+    "implicit": "0/2",
+    "correction": "0/1",
+    "preference": "0/3",
+    "recall": "0/5",
+    "opinion_arc": "0/1",
+    "noise": "0/3",
+    "cold_session": "1/1"
+  },
+  "results": [
+    {
+      "id": "p01",
+      "category": "fact_evolution",
+      "query": "Where does the user work right now?",
+      "latency_ms": 3.7,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p02",
+      "category": "fact_evolution",
+      "query": "What is the user's job title or role?",
+      "latency_ms": 3.6,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p03",
+      "category": "multi_hop",
+      "query": "What city does the user with the dog named Biscuit live in?",
+      "latency_ms": 3.6,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p04",
+      "category": "keyword",
+      "query": "What's their dog's name?",
+      "latency_ms": 3.4,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p05",
+      "category": "implicit",
+      "query": "Does the user have any pets?",
+      "latency_ms": 3.5,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p06",
+      "category": "fact_evolution",
+      "query": "Where does the user live?",
+      "latency_ms": 3.4,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p07",
+      "category": "correction",
+      "query": "What food allergies does the user have?",
+      "latency_ms": 3.9,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p08",
+      "category": "preference",
+      "query": "What kind of food does the user like?",
+      "latency_ms": 3.4,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p09",
+      "category": "implicit",
+      "query": "Does the user have children?",
+      "latency_ms": 3.3,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p10",
+      "category": "recall",
+      "query": "What does the user do for a living and where are they based?",
+      "latency_ms": 3.5,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p11",
+      "category": "opinion_arc",
+      "query": "How does the user feel about TypeScript?",
+      "latency_ms": 3.4,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p12",
+      "category": "preference",
+      "query": "How should I format my answers for this user?",
+      "latency_ms": 3.3,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p13",
+      "category": "fact_evolution",
+      "query": "Where does this user live?",
+      "latency_ms": 3.3,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p14",
+      "category": "preference",
+      "query": "Any dietary preferences I should know about for restaurant suggestions?",
+      "latency_ms": 3.3,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p15",
+      "category": "recall",
+      "query": "What industry does the user work in?",
+      "latency_ms": 3.7,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p16",
+      "category": "recall",
+      "query": "What was the user debugging recently?",
+      "latency_ms": 4.0,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p17",
+      "category": "recall",
+      "query": "What is the user preparing for?",
+      "latency_ms": 3.3,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p18",
+      "category": "noise",
+      "query": "What's the user's favorite soccer team?",
+      "latency_ms": 3.6,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p19",
+      "category": "noise",
+      "query": "What car does the user drive?",
+      "latency_ms": 3.2,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p20",
+      "category": "noise",
+      "query": "Tell me about the user's wedding plans.",
+      "latency_ms": 3.5,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p21",
+      "category": "cold_session",
+      "query": "What do you know about this user?",
+      "latency_ms": 0.9,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": true,
+          "detail": "context='' citations=0"
+        }
+      ],
+      "passed": true,
+      "context": ""
+    },
+    {
+      "id": "p22",
+      "category": "keyword",
+      "query": "When is the violin recital?",
+      "latency_ms": 3.4,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p23",
+      "category": "multi_hop",
+      "query": "Which city did the photographer user move his dinner party planning expertise to?",
+      "latency_ms": 3.4,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "p24",
+      "category": "recall",
+      "query": "What pet-related mishap did the user mention?",
+      "latency_ms": 3.4,
+      "checks": [
+        {
+          "check": "http_200",
+          "ok": false,
+          "detail": 500
+        }
+      ],
+      "passed": false
+    }
+  ]
+}

@@ -1,0 +1,416 @@
+{
+  "label": "v0.1",
+  "timestamp": "20260611T032940Z",
+  "score": 0.7083333333333334,
+  "passed": 17,
+  "total": 24,
+  "recall_latency_ms": {
+    "p50": 1.0,
+    "p95": 1.2
+  },
+  "ingest_seconds": 0.016285459001665004,
+  "by_category": {
+    "fact_evolution": "2/4",
+    "multi_hop": "2/2",
+    "keyword": "1/2",
+    "implicit": "2/2",
+    "correction": "1/1",
+    "preference": "3/3",
+    "recall": "4/5",
+    "opinion_arc": "1/1",
+    "noise": "0/3",
+    "cold_session": "1/1"
+  },
+  "results": [
+    {
+      "id": "p01",
+      "category": "fact_evolution",
+      "query": "Where does the user work right now?",
+      "latency_ms": 1.2,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "history_in_context",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "superseded_memory_exists",
+          "ok": false,
+          "detail": "no inactive memory mentioning ['Stripe']"
+        }
+      ],
+      "passed": false,
+      "context": "## Relevant from recent conversations\n- [2025-04-05] Big news \u2014 I just started at Notion this week as a product manager! Switching from engineering to PM has been a whirlwind. Good so far. Biscuit approves of the home office setup too.\n- [2025-02-20] I'm planning a move soon and weighing neighborhoods. We ended up choosing Denver \u2014 signing the lease next week. Any tips for finding dog-friendly apartments?\n- [2025-01-10] Hey! Quick question about TypeScript config. For context I'm a backend engineer at Stripe, we use tsconfig strict mode everywhere."
+    },
+    {
+      "id": "p02",
+      "category": "fact_evolution",
+      "query": "What is the user's job title or role?",
+      "latency_ms": 1.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-04-05] Big news \u2014 I just started at Notion this week as a product manager! Switching from engineering to PM has been a whirlwind. Good so far. Biscuit approves of the home office setup too.\n- [2025-01-10] Hey! Quick question about TypeScript config. For context I'm a backend engineer at Stripe, we use tsconfig strict mode everywhere.\n- [2025-01-10] Sorry, got distracted \u2014 was walking Biscuit this morning and he chewed through his leash, had to improvise. Anyway: how do I get noImplicitAny to play nice with legacy JS imports?\n- [2025-02-20] I'm planning a move soon and weighing neighborhoods. We ended up choosing Denver \u2014 signing the lease next week. Any tips for finding dog-friendly apartments?"
+    },
+    {
+      "id": "p03",
+      "category": "multi_hop",
+      "query": "What city does the user with the dog named Biscuit live in?",
+      "latency_ms": 1.2,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-02-20] I'm planning a move soon and weighing neighborhoods. We ended up choosing Denver \u2014 signing the lease next week. Any tips for finding dog-friendly apartments?\n- [2025-01-10] Sorry, got distracted \u2014 was walking Biscuit this morning and he chewed through his leash, had to improvise. Anyway: how do I get noImplicitAny to play nice with legacy JS imports?\n- [2025-04-05] Big news \u2014 I just started at Notion this week as a product manager! Switching from engineering to PM has been a whirlwind. Good so far. Biscuit approves of the home office setup too.\n- [2025-01-10] Hey! Quick question about TypeScript config. For context I'm a backend engineer at Stripe, we use tsconfig strict mode everywhere."
+    },
+    {
+      "id": "p04",
+      "category": "keyword",
+      "query": "What's their dog's name?",
+      "latency_ms": 0.9,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": false,
+          "detail": "none of ['Biscuit'] in context"
+        }
+      ],
+      "passed": false,
+      "context": "## Relevant from recent conversations\n- [2025-01-10] Hey! Quick question about TypeScript config. For context I'm a backend engineer at Stripe, we use tsconfig strict mode everywhere."
+    },
+    {
+      "id": "p05",
+      "category": "implicit",
+      "query": "Does the user have any pets?",
+      "latency_ms": 0.9,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-02-20] I'm planning a move soon and weighing neighborhoods. We ended up choosing Denver \u2014 signing the lease next week. Any tips for finding dog-friendly apartments?\n- [2025-04-05] Big news \u2014 I just started at Notion this week as a product manager! Switching from engineering to PM has been a whirlwind. Good so far. Biscuit approves of the home office setup too.\n- [2025-01-10] Hey! Quick question about TypeScript config. For context I'm a backend engineer at Stripe, we use tsconfig strict mode everywhere."
+    },
+    {
+      "id": "p06",
+      "category": "fact_evolution",
+      "query": "Where does the user live?",
+      "latency_ms": 0.9,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-04-05] Big news \u2014 I just started at Notion this week as a product manager! Switching from engineering to PM has been a whirlwind. Good so far. Biscuit approves of the home office setup too.\n- [2025-02-20] I'm planning a move soon and weighing neighborhoods. We ended up choosing Denver \u2014 signing the lease next week. Any tips for finding dog-friendly apartments?\n- [2025-01-10] Hey! Quick question about TypeScript config. For context I'm a backend engineer at Stripe, we use tsconfig strict mode everywhere."
+    },
+    {
+      "id": "p07",
+      "category": "correction",
+      "query": "What food allergies does the user have?",
+      "latency_ms": 0.9,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "not_active_memory",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-03-01] Can you help me plan a dinner party menu? I'm allergic to peanuts so nothing with those. Six guests. Wait, sorry \u2014 I misspoke. Not peanuts, it's shellfish I'm allergic to. Peanuts are fine. Thai food is actually my favorite.\n- [2025-03-01] My daughter's violin recital is the same evening, so dinner has to start late, around 8pm.\n- [2025-03-15] The dinner went great, thanks. Different topic: I'm a freelance photographer based in Lisbon and I need help writing a client contract for a wedding shoot."
+    },
+    {
+      "id": "p08",
+      "category": "preference",
+      "query": "What kind of food does the user like?",
+      "latency_ms": 1.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-03-01] Can you help me plan a dinner party menu? I'm allergic to peanuts so nothing with those. Six guests. Wait, sorry \u2014 I misspoke. Not peanuts, it's shellfish I'm allergic to. Peanuts are fine. Thai food is actually my favorite.\n- [2025-03-01] My daughter's violin recital is the same evening, so dinner has to start late, around 8pm.\n- [2025-03-15] The dinner went great, thanks. Different topic: I'm a freelance photographer based in Lisbon and I need help writing a client contract for a wedding shoot."
+    },
+    {
+      "id": "p09",
+      "category": "implicit",
+      "query": "Does the user have children?",
+      "latency_ms": 0.9,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-03-01] My daughter's violin recital is the same evening, so dinner has to start late, around 8pm.\n- [2025-03-15] The dinner went great, thanks. Different topic: I'm a freelance photographer based in Lisbon and I need help writing a client contract for a wedding shoot."
+    },
+    {
+      "id": "p10",
+      "category": "recall",
+      "query": "What does the user do for a living and where are they based?",
+      "latency_ms": 1.1,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "expect_all",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-03-15] The dinner went great, thanks. Different topic: I'm a freelance photographer based in Lisbon and I need help writing a client contract for a wedding shoot.\n- [2025-03-01] Can you help me plan a dinner party menu? I'm allergic to peanuts so nothing with those. Six guests. Wait, sorry \u2014 I misspoke. Not peanuts, it's shellfish I'm allergic to. Peanuts are fine. Thai food is actually my favorite.\n- [2025-03-01] My daughter's violin recital is the same evening, so dinner has to start late, around 8pm."
+    },
+    {
+      "id": "p11",
+      "category": "opinion_arc",
+      "query": "How does the user feel about TypeScript?",
+      "latency_ms": 1.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-03-12] Ugh, TypeScript generics are driving me crazy today. Conditional types with infer are unreadable. Starting to have mixed feelings about this language.\n- [2025-01-05] I absolutely love TypeScript. The type system has saved me from so many bugs. Migrating our whole startup's codebase to it.\n- [2025-05-20] I've landed on a take: TypeScript is fine for big team projects, but for quick scripts I just use Python now. Right tool for the job. Exactly. By the way I prefer really short answers \u2014 bullet points over paragraphs, always."
+    },
+    {
+      "id": "p12",
+      "category": "preference",
+      "query": "How should I format my answers for this user?",
+      "latency_ms": 1.1,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-05-20] I've landed on a take: TypeScript is fine for big team projects, but for quick scripts I just use Python now. Right tool for the job. Exactly. By the way I prefer really short answers \u2014 bullet points over paragraphs, always.\n- [2025-03-12] Ugh, TypeScript generics are driving me crazy today. Conditional types with infer are unreadable. Starting to have mixed feelings about this language.\n- [2025-01-05] I absolutely love TypeScript. The type system has saved me from so many bugs. Migrating our whole startup's codebase to it."
+    },
+    {
+      "id": "p13",
+      "category": "fact_evolution",
+      "query": "Where does this user live?",
+      "latency_ms": 0.9,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "history_in_context",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "check": "superseded_memory_exists",
+          "ok": false,
+          "detail": "no inactive memory mentioning ['NYC', 'New York']"
+        }
+      ],
+      "passed": false,
+      "context": "## Relevant from recent conversations\n- [2025-02-01] What are good vegetarian meal-prep ideas? I live in NYC and my tiny kitchen has basically one burner.\n- [2025-06-10] I just moved to Berlin from NYC last month for a new job at a music tech startup. Loving it so far. Where do I find good vegetarian d\u00f6ner?"
+    },
+    {
+      "id": "p14",
+      "category": "preference",
+      "query": "Any dietary preferences I should know about for restaurant suggestions?",
+      "latency_ms": 1.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-06-10] I just moved to Berlin from NYC last month for a new job at a music tech startup. Loving it so far. Where do I find good vegetarian d\u00f6ner?\n- [2025-02-01] Can you check the weather for my run tomorrow?\n- [2025-02-01] What are good vegetarian meal-prep ideas? I live in NYC and my tiny kitchen has basically one burner."
+    },
+    {
+      "id": "p15",
+      "category": "recall",
+      "query": "What industry does the user work in?",
+      "latency_ms": 1.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-02-01] What are good vegetarian meal-prep ideas? I live in NYC and my tiny kitchen has basically one burner.\n- [2025-02-01] Can you check the weather for my run tomorrow?\n- [2025-06-10] I just moved to Berlin from NYC last month for a new job at a music tech startup. Loving it so far. Where do I find good vegetarian d\u00f6ner?"
+    },
+    {
+      "id": "p16",
+      "category": "recall",
+      "query": "What was the user debugging recently?",
+      "latency_ms": 0.9,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-04-22] Help me debug a React dashboard that re-renders way too often. I think it's a context provider issue. That fixed it, thanks. I'm prepping for a system design interview at a big tech company next week, so I'll be back with more questions."
+    },
+    {
+      "id": "p17",
+      "category": "recall",
+      "query": "What is the user preparing for?",
+      "latency_ms": 1.2,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-04-22] Help me debug a React dashboard that re-renders way too often. I think it's a context provider issue. That fixed it, thanks. I'm prepping for a system design interview at a big tech company next week, so I'll be back with more questions."
+    },
+    {
+      "id": "p18",
+      "category": "noise",
+      "query": "What's the user's favorite soccer team?",
+      "latency_ms": 1.3,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": false,
+          "detail": "context='## Relevant from recent conversations\\n- [2025-04-22] Help me debug a React dashboard that re-renders way too often. I th' citations=1"
+        }
+      ],
+      "passed": false,
+      "context": "## Relevant from recent conversations\n- [2025-04-22] Help me debug a React dashboard that re-renders way too often. I think it's a context provider issue. That fixed it, thanks. I'm prepping for a system design interview at a big tech company next week, so I'll be back with more questions."
+    },
+    {
+      "id": "p19",
+      "category": "noise",
+      "query": "What car does the user drive?",
+      "latency_ms": 1.0,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": false,
+          "detail": "context=\"## Relevant from recent conversations\\n- [2025-01-10] Hey! Quick question about TypeScript config. For context I'm a back\" citations=3"
+        }
+      ],
+      "passed": false,
+      "context": "## Relevant from recent conversations\n- [2025-01-10] Hey! Quick question about TypeScript config. For context I'm a backend engineer at Stripe, we use tsconfig strict mode everywhere.\n- [2025-04-05] Big news \u2014 I just started at Notion this week as a product manager! Switching from engineering to PM has been a whirlwind. Good so far. Biscuit approves of the home office setup too.\n- [2025-02-20] I'm planning a move soon and weighing neighborhoods. We ended up choosing Denver \u2014 signing the lease next week. Any tips for finding dog-friendly apartments?"
+    },
+    {
+      "id": "p20",
+      "category": "noise",
+      "query": "Tell me about the user's wedding plans.",
+      "latency_ms": 1.0,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": false,
+          "detail": "context='## Relevant from recent conversations\\n- [2025-03-12] Ugh, TypeScript generics are driving me crazy today. Conditional ty' citations=3"
+        }
+      ],
+      "passed": false,
+      "context": "## Relevant from recent conversations\n- [2025-03-12] Ugh, TypeScript generics are driving me crazy today. Conditional types with infer are unreadable. Starting to have mixed feelings about this language.\n- [2025-01-05] I absolutely love TypeScript. The type system has saved me from so many bugs. Migrating our whole startup's codebase to it.\n- [2025-05-20] I've landed on a take: TypeScript is fine for big team projects, but for quick scripts I just use Python now. Right tool for the job. Exactly. By the way I prefer really short answers \u2014 bullet points over paragraphs, always."
+    },
+    {
+      "id": "p21",
+      "category": "cold_session",
+      "query": "What do you know about this user?",
+      "latency_ms": 1.0,
+      "checks": [
+        {
+          "check": "empty_context",
+          "ok": true,
+          "detail": "context='' citations=0"
+        }
+      ],
+      "passed": true,
+      "context": ""
+    },
+    {
+      "id": "p22",
+      "category": "keyword",
+      "query": "When is the violin recital?",
+      "latency_ms": 1.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-03-01] My daughter's violin recital is the same evening, so dinner has to start late, around 8pm.\n- [2025-03-01] Can you help me plan a dinner party menu? I'm allergic to peanuts so nothing with those. Six guests. Wait, sorry \u2014 I misspoke. Not peanuts, it's shellfish I'm allergic to. Peanuts are fine. Thai food is actually my favorite.\n- [2025-03-15] The dinner went great, thanks. Different topic: I'm a freelance photographer based in Lisbon and I need help writing a client contract for a wedding shoot."
+    },
+    {
+      "id": "p23",
+      "category": "multi_hop",
+      "query": "Which city did the photographer user move his dinner party planning expertise to?",
+      "latency_ms": 1.1,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "passed": true,
+      "context": "## Relevant from recent conversations\n- [2025-03-15] The dinner went great, thanks. Different topic: I'm a freelance photographer based in Lisbon and I need help writing a client contract for a wedding shoot.\n- [2025-03-01] Can you help me plan a dinner party menu? I'm allergic to peanuts so nothing with those. Six guests. Wait, sorry \u2014 I misspoke. Not peanuts, it's shellfish I'm allergic to. Peanuts are fine. Thai food is actually my favorite.\n- [2025-03-01] My daughter's violin recital is the same evening, so dinner has to start late, around 8pm."
+    },
+    {
+      "id": "p24",
+      "category": "recall",
+      "query": "What pet-related mishap did the user mention?",
+      "latency_ms": 1.0,
+      "checks": [
+        {
+          "check": "expect_any",
+          "ok": false,
+          "detail": "none of ['leash', 'chewed'] in context"
+        }
+      ],
+      "passed": false,
+      "context": "## Relevant from recent conversations\n- [2025-02-20] I'm planning a move soon and weighing neighborhoods. We ended up choosing Denver \u2014 signing the lease next week. Any tips for finding dog-friendly apartments?\n- [2025-01-10] Hey! Quick question about TypeScript config. For context I'm a backend engineer at Stripe, we use tsconfig strict mode everywhere.\n- [2025-04-05] Big news \u2014 I just started at Notion this week as a product manager! Switching from engineering to PM has been a whirlwind. Good so far. Biscuit approves of the home office setup too."
+    }
+  ]
+}

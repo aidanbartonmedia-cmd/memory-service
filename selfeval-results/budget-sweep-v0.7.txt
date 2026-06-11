@@ -1,0 +1,12 @@
+ budget   used  ratio  context-head
+      8      0   0.00  
+     16     11   0.69  - Has a dog named Biscuit (updated 2026-06-11)
+     32     19   0.59  ## Known facts about this user / - Has a dog named Biscuit (up
+     64     55   0.86  ## Known facts about this user / - Has a dog named Biscuit (up
+    128    122   0.95  ## Known facts about this user / - Has a dog named Biscuit (up
+    256    219   0.86  ## Known facts about this user / - Has a dog named Biscuit (up
+    512    301   0.59  ## Known facts about this user / - Has a dog named Biscuit (up
+   1024    301   0.29  ## Known facts about this user / - Has a dog named Biscuit (up
+   2048    301   0.15  ## Known facts about this user / - Has a dog named Biscuit (up
+
+worst ratio: 0.95 (contract bound: 2.0)

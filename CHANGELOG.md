@@ -2,10 +2,15 @@
 
 Every entry below was measured with the same loop: `scripts/selfeval.py`
 ingests the 5 scripted conversations in `fixtures/conversations.json` (14
-turns, 5 users) and runs 24 probe queries against `/recall`, checking expected
+turns, 5 users) and runs probe queries against `/recall`, checking expected
 facts, supersession chains via `/users/{id}/memories`, and empty-context
-behavior on noise probes. Raw result JSON for every run quoted here is
-committed under `selfeval-results/`.
+behavior on noise probes. The probe set was 24 queries through v0.6 and grew
+to 32 at v0.7 (cross-user noise + paraphrase stress probes). Raw result JSON
+for every run quoted here is committed under `selfeval-results/` — scores
+before v0.7 are against the 24-probe set, from v0.7 against the 32-probe set.
+(The three earliest v0.1-labeled result files scoring 1/24 are harness
+bootstrap runs from before the skeleton served data correctly; the quoted
+v0.1 baseline is the last of them.)
 
 A caveat I kept in mind throughout: the fixture metric is substring-based, so
 it is *more lenient* than an LLM judge — a raw-chat-text context can pass a
@@ -124,9 +129,10 @@ hit confirming. Below the gate, `/recall` returns `{"context": "",
   phrased as the current state of the world; the transition becomes a
   separate event memory. Retrieval failures can be extraction bugs.
 
-**Result:** **24/24 (1.00)**, including noise 3/3 — and stable at 24/24
-across two further independent fresh ingests (extraction has run-to-run
-variance; one clean run proves little). Recall p50 5ms.
+**Result:** **24/24 (1.00)**, including noise 3/3 — and stable at 24/24 on a
+further independent fresh ingest (`v0.4-stability`; extraction has
+run-to-run variance, one clean run proves little — later fresh ingests at
+v0.5-docker/v0.6-docker re-confirmed on the same probe set). Recall p50 5ms.
 
 **Next:** The gate margins are honest but thin (calibrated on 24 probes, not
 2,400). The floors are env-tunable (`MEMORY_DENSE_FLOOR*`) and the
@@ -188,6 +194,61 @@ exposure) and fixed what survived verification:
 **Result:** pytest 30/30; self-eval re-run after the changes: **24/24** with
 the same latency profile. No retrieval-quality change expected or observed —
 this round was correctness, scoping, and review-readiness.
+
+**Next:** below.
+
+---
+
+## v0.7 — Stress probes break the gate; term-support gate fixes it (plus two crash/deadline fixes)
+
+**What changed:** The adversarial review's strongest finding was that the
+noise gate didn't generalize: its own showcase probe ("tell me about the
+user's wedding plans"), pointed at a *different* fixture user, returned the
+full profile. I extended the fixture to 32 probes — the same noise queries
+against every user, "favorite movie" against the favorite-cuisine user,
+plus three paraphrase probes with zero token overlap ("what does this
+person do to pay the bills?" → photographer) — and iterated against it:
+
+- *Per-item conjunction* (the v0.4 gate took max-dense-anywhere + any-
+  keyword-anywhere; requiring both signals on the same item fixed the
+  split-evidence leak): 27/32. Calibration on the expanded set then showed
+  the real problem — noise tops at 0.594 holistic similarity, genuine
+  paraphrases bottom at 0.57. **No floor can separate them.**
+- *Term-level support*: measured per-term — the query's topical noun,
+  embedded alone against the best ambiguous-zone item, separates cleanly:
+  "wedding"/"movie"/"soccer" top out at 0.496 support, "dinner"/"pay"/
+  "salary"/"live" bottom at 0.55+. The frame words ("favorite", "plans")
+  that caused the holistic overlap are excluded from evidence terms. First
+  cut scored 28/32 but *re-leaked* three noise probes — the tokenizer kept
+  "user's" as a content term (possessive regex) and it semantically matched
+  everything; normalizing possessives fixed it. **32/32**, stable on a
+  second independent fresh ingest. Calibration + budget artifacts committed
+  (`selfeval-results/calibration-v0.7.txt`, `budget-sweep-v0.7.txt`).
+
+**Also fixed from review findings, each with a regression test:**
+- The heuristic fallback extractor crashed (IndexError) on message content
+  containing colon-less lines starting with "user" — and since v0.6 ordering
+  that 500'd the request and dropped the turn. It now parses the structured
+  messages, and `extract()` degrades llm → heuristic → minimal-summary, never
+  raising.
+- Worst-case `/turns` latency could hit ~137s (45s SDK timeout × 3 attempts
+  + retry-after sleeps) against the eval's 60s budget. Extraction now runs
+  under a hard 40s wall-clock deadline (20s/attempt, ≤2 attempts) before
+  falling back.
+- Out-of-range `max_tokens`/`limit` clamp instead of 400; tiny budgets emit
+  the top fact bare instead of an empty context (header didn't fit); CJK
+  chars are charged a full token (the chars/4 heuristic undercounted them
+  ~4×); timestamps normalize to UTC before lexicographic ordering; deletes
+  null dangling `supersedes` pointers; reinforce ops are guarded (target
+  must exist+be active, confidence only ratchets up); events tier only
+  renders query-relevant events; `HEAD /health` supported; the spec-required
+  recall-quality fixture test now lives in `tests/` (heuristic-mode floor;
+  the LLM-mode loop remains `scripts/selfeval.py`).
+
+**Result:** Self-eval **32/32 (1.00)** on the expanded stress set, two
+independent fresh ingests. pytest 38/38. Budget sweep worst ratio 0.95
+(budgets 8–2048). Recall p50 5ms / p95 12ms (term-support adds a few ms in
+the ambiguous zone only).
 
 **Next:** below.
 
