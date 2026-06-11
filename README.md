@@ -159,8 +159,10 @@ models per environment.
 across that user's sessions (that's what makes session-2 recall of a
 session-1 fact work — and the eval's own smoke test expects it). Anonymous
 turns (`user_id: null`) are scoped to `session:<session_id>` and can never
-bleed across sessions. Concurrent users are isolated by the same key; the
-test suite hammers this in parallel threads.
+bleed across sessions. A recall that passes `user_id: null` but names a
+session whose turns were written under a user resolves to that user's scope —
+the session demonstrably belongs to them. Concurrent users are isolated by
+the same key; the test suite hammers this in parallel threads.
 
 ## 5. Fact evolution
 

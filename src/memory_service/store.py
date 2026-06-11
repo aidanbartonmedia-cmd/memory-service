@@ -25,6 +25,25 @@ def owner_key(user_id: str | None, session_id: str | None) -> str:
     return f"session:{session_id or 'unknown'}"
 
 
+def resolve_owner(user_id: str | None, session_id: str | None) -> str:
+    """Owner for READ paths. A recall with user_id null but a session_id whose
+    turns were written under a user must reach that user's memories — the
+    caller knows the session, not necessarily the user. Falls back to the
+    anonymous session scope only when the session has no known user."""
+    if user_id:
+        return user_id
+    if session_id:
+        with db.tx() as conn:
+            row = conn.execute(
+                "SELECT user_id FROM turns WHERE session_id=? AND user_id IS NOT NULL"
+                " ORDER BY ts DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+        if row and row["user_id"]:
+            return row["user_id"]
+    return owner_key(None, session_id)
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 

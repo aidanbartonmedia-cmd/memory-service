@@ -147,7 +147,7 @@ def post_turn(turn: TurnIn) -> dict[str, str]:
 
 @app.post("/recall", dependencies=[Depends(auth)])
 def recall(req: RecallIn) -> RecallOut:
-    owner = store.owner_key(req.user_id, req.session_id)
+    owner = store.resolve_owner(req.user_id, req.session_id)
     retrieved = retrieval.retrieve(owner, req.query)
     # Noise resistance: when nothing in the store is plausibly about this
     # query, return an empty context rather than the user's profile — a
@@ -171,7 +171,7 @@ def search(req: SearchIn) -> SearchOut:
     # /search is an explicit agent tool call, so a scopeless search is a
     # deliberate "look everywhere".
     owner = (
-        store.owner_key(req.user_id, req.session_id)
+        store.resolve_owner(req.user_id, req.session_id)
         if (req.user_id or req.session_id)
         else None
     )

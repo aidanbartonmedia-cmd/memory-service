@@ -66,6 +66,17 @@ def test_same_user_shares_across_sessions(client):
     assert "Stripe" in r.json()["context"]
 
 
+def test_recall_with_null_user_resolves_session_owner(client):
+    """Turns written with a user_id must be recallable when the caller only
+    knows the session_id (user_id: null in the recall body)."""
+    client.post("/turns", json=make_turn(session_id="sess-x", user_id="carol",
+                                         text="I work at Initech."))
+    r = client.post("/recall", json={"query": "Where does the user work?",
+                                     "session_id": "sess-x", "user_id": None,
+                                     "max_tokens": 256})
+    assert "Initech" in r.json()["context"]
+
+
 def test_supersession_chain(client):
     client.post("/turns", json=make_turn(session_id="s1", timestamp="2025-01-01T00:00:00Z",
                                          text="I work at Stripe."))
