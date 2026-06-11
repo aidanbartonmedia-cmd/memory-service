@@ -1,6 +1,10 @@
-"""Retrieval: keyword (FTS5/BM25) search. v0.1 — keyword-only baseline.
+"""Retrieval: hybrid keyword (FTS5/BM25) + dense (local embeddings), fused
+with reciprocal rank fusion.
 
-Dense + fusion lands in a later iteration (see CHANGELOG).
+Why hybrid: pure embedding search misses keyword-anchored queries ("what's
+their dog's name?" needs the token Biscuit-adjacent memory, not a vibe), and
+pure BM25 misses paraphrases ("where is the user based?" vs "lives in
+Berlin"). RRF fuses the two rankings without score calibration.
 """
 
 from __future__ import annotations
@@ -9,7 +13,7 @@ import logging
 import re
 from typing import Any
 
-from . import db
+from . import config, db, embeddings
 
 log = logging.getLogger("memory.retrieval")
 
@@ -82,9 +86,58 @@ def bm25_turns(owner: str, query: str, limit: int = 20) -> list[tuple[str, float
     return ranked[:limit]
 
 
-def retrieve(owner: str, query: str, *, limit: int = 12) -> dict[str, list[tuple[str, float]]]:
-    """v0.1 baseline: BM25 only. Returns {"memories": [...], "turns": [...]}."""
+def dense_memories(owner: str, qvec, limit: int = 20) -> list[tuple[str, float]]:
+    """[(memory_id, cosine)] over the owner's active memories."""
+    with db.tx() as conn:
+        rows = conn.execute(
+            "SELECT id, embedding FROM memories WHERE owner=? AND active=1 AND embedding IS NOT NULL",
+            (owner,),
+        ).fetchall()
+    return embeddings.cosine_rank(qvec, [(r["id"], r["embedding"]) for r in rows])[:limit]
+
+
+def dense_turns(owner: str, qvec, limit: int = 20) -> list[tuple[str, float]]:
+    with db.tx() as conn:
+        rows = conn.execute(
+            "SELECT id, embedding FROM turns WHERE owner=? AND embedding IS NOT NULL",
+            (owner,),
+        ).fetchall()
+    return embeddings.cosine_rank(qvec, [(r["id"], r["embedding"]) for r in rows])[:limit]
+
+
+def rrf_fuse(rankings: list[list[tuple[str, float]]], k: int | None = None) -> list[tuple[str, float]]:
+    """Reciprocal rank fusion: score(d) = sum over rankings of 1/(k + rank).
+    Rank positions only — no cross-system score calibration needed."""
+    k = k or config.RRF_K
+    fused: dict[str, float] = {}
+    for ranking in rankings:
+        for pos, (doc_id, _score) in enumerate(ranking):
+            fused[doc_id] = fused.get(doc_id, 0.0) + 1.0 / (k + pos + 1)
+    return sorted(fused.items(), key=lambda x: -x[1])
+
+
+def retrieve(owner: str, query: str, *, limit: int = 12) -> dict[str, Any]:
+    """Hybrid retrieval. Returns ranked memories/turns plus diagnostics used
+    by the relevance gate (max dense similarity, keyword hit counts)."""
+    bm_m = bm25_memories(owner, query, limit * 2)
+    bm_t = bm25_turns(owner, query, limit * 2)
+
+    qvec = embeddings.embed_one(query) if query.strip() else None
+    dn_m = dense_memories(owner, qvec, limit * 2) if qvec is not None else []
+    dn_t = dense_turns(owner, qvec, limit * 2) if qvec is not None else []
+
+    mem_ranked = rrf_fuse([bm_m, dn_m])[:limit]
+    turn_ranked = rrf_fuse([bm_t, dn_t])[:limit]
+
     return {
-        "memories": bm25_memories(owner, query, limit),
-        "turns": bm25_turns(owner, query, limit),
+        "memories": mem_ranked,
+        "turns": turn_ranked,
+        "diagnostics": {
+            "max_dense_memory": dn_m[0][1] if dn_m else 0.0,
+            "max_dense_turn": dn_t[0][1] if dn_t else 0.0,
+            "bm25_memory_hits": len(bm_m),
+            "bm25_turn_hits": len(bm_t),
+            "dense_memory": dict(dn_m),
+            "dense_turn": dict(dn_t),
+        },
     }
