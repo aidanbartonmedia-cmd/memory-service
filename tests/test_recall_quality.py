@@ -7,7 +7,7 @@ By default this runs in heuristic-extraction mode (no API key, fast,
 deterministic) and asserts a degraded-mode floor — the heuristic extractor
 catches pattern-shaped facts (employment, location, pets, allergies) but
 not implicit facts, corrections, or opinion arcs, so the bar is deliberately
-lower. The full-quality loop (LLM extraction, 33/33 expected) is
+lower. The full-quality loop (LLM extraction, 37/37 expected) is
 scripts/selfeval.py against a running service; CHANGELOG quotes those runs.
 """
 
@@ -19,10 +19,11 @@ from pathlib import Path
 FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "conversations.json"
 
 # Probes a regex extractor cannot pass (implicit facts, opinion arcs,
-# corrections, paraphrases that need dense matching on LLM-phrased values).
+# corrections, paraphrases that need dense matching on LLM-phrased values,
+# name-based retractions like "gave Mochi away" that need entity resolution).
 # They run anyway (must not crash) but are excluded from the floor.
 HEURISTIC_EXEMPT_CATEGORIES = {"implicit", "opinion_arc", "correction", "paraphrase",
-                               "multi_hop", "keyword"}
+                               "multi_hop", "keyword", "retraction"}
 
 
 def test_recall_quality_fixture(client):

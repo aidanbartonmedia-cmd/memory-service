@@ -252,15 +252,17 @@ def _relevance_gate(
 
     Rule B — the ambiguous zone [DENSE_FLOOR_LOW=0.50, 0.62) needs topical
     confirmation: holistic sims of genuinely-related paraphrases and
-    flat/frame-matched noise fully overlap in this band (CHANGELOG v0.7
-    measured both at 0.55-0.59), so the zone item must additionally show
+    flat/frame-matched noise fully overlap in this band (measured — see the
+    committed calibration artifact), so the zone item must additionally show
     *term-level support*: some content term of the query, embedded alone,
-    must hit TERM_FLOOR (0.52) cosine against that same item. On the fixture
-    this separates cleanly — noise topical terms ("wedding", "movie",
-    "soccer") top out at 0.478 against their best zone item, while signal
-    terms ("dinner", "pay", "salary", "live") bottom at 0.535. Frame words
+    must hit TERM_FLOOR (0.52) cosine against that same item. Frame words
     ("favorite", "plans") are excluded from evidence terms — they are why
-    the noise items scored high holistically in the first place.
+    the noise items scored high holistically in the first place. The
+    measured noise/signal term-support distributions for the current fixture
+    are in selfeval-results/calibration-v0.8.txt (regenerated per release by
+    scripts/calibrate_gate.py); the margins are thin and the floors are
+    env-tunable — the two-tier shape, not the constants, is what's
+    load-bearing.
 
     Earlier forms and why they died (CHANGELOG v0.4/v0.7): one global floor
     (margins of 0.007), global dense + any keyword hit (one item supplied

@@ -1,13 +1,14 @@
 # CHANGELOG
 
 Every entry below was measured with the same loop: `scripts/selfeval.py`
-ingests the 5 scripted conversations in `fixtures/conversations.json` (14
-turns, 5 users) and runs probe queries against `/recall`, checking expected
-facts, supersession chains via `/users/{id}/memories`, and empty-context
-behavior on noise probes. The probe set was 24 queries through v0.6 and grew
-to 32 at v0.7 (cross-user noise + paraphrase stress probes). Raw result JSON
-for every run quoted here is committed under `selfeval-results/` — scores
-before v0.7 are against the 24-probe set, from v0.7 against the 32-probe set.
+ingests the scripted conversations in `fixtures/conversations.json` (16
+turns, 6 users at v0.8) and runs probe queries against `/recall`, checking
+expected facts, supersession chains via `/users/{id}/memories`, and
+empty-context behavior on noise probes. The probe set was 24 queries through
+v0.6, grew to 32 at v0.7 (cross-user noise + paraphrase stress probes), and
+to 37 at v0.8 (retraction + trajectory probes). Raw result JSON for every
+run quoted here is committed under `selfeval-results/` — scores before v0.7
+are against the 24-probe set, v0.7 against 32, v0.8 against 37.
 (The three earliest v0.1-labeled result files scoring 1/24 are harness
 bootstrap runs from before the skeleton served data correctly; the quoted
 v0.1 baseline is the last of them.)
@@ -254,11 +255,97 @@ the ambiguous zone only).
 
 ---
 
+## v0.8 — Retraction as negated-state supersession + opinion-arc trajectory rendering
+
+**What changed:** Two evolution cases the model handled only implicitly are
+now designed behaviors, each probed by the fixture:
+
+- **Retraction (cessation without replacement).** "We had to give Mochi
+  away" previously depended on the extractor improvising; the failure modes
+  were a stale `Has a cat named Mochi` staying active, or a transition-
+  phrased value ("Gave the cat away") that recall can't match. I considered
+  the obvious alternative — deactivate with no replacement row — and
+  rejected it: recall context goes to a frozen LLM, and silence after a
+  deactivation is indistinguishable from "never had a pet". Retraction is
+  now an explicit extraction rule: supersede with the **negated current
+  state** (`No longer has a cat`, chain preserving what was true before).
+  The heuristic fallback gets pattern-shaped retractions too (gave-away /
+  no-longer-have / not-X-anymore / quit-left), with one guard found by
+  testing the patterns adversarially: "I left Denver." is titlecased and
+  clause-final, so the employment retraction only fires when the captured
+  name matches the *recorded* employer — the degraded mode must not negate
+  what it never knew.
+- **Opinion-arc trajectory.** v0.7 rendered one hop of history; a 3-step arc
+  (loves TS → mixed feelings → "right tool for the job") read as a clean
+  before/after, hiding the middle. `/recall` now renders up to two hops
+  ("previously: …; earlier: …") at budgets ≥ 512, one in [256, 512), none
+  below — capped at two so a long chain can't crowd out current facts.
+
+Fixture grew to 6 users / 37 probes: a retraction user (pet given away +
+vegetarian → pescatarian, probing both the negation in context and the
+chain via `/users/{id}/memories`), a trajectory probe, a noise and a
+paraphrase probe for the new user.
+
+**Adversarial review round (same loop as v0.6/v0.7 — findings, each fixed
+with a regression test):**
+
+- *The draft retraction regexes fired on idioms and adjacent topics* — "I
+  don't have a dog in this fight", "I don't have my dog with me today",
+  "we gave the dog food away", "I'm not a vegetarian-hater" — and a false
+  match **supersedes a true fact**, which is strictly worse than v0.7's
+  failure modes (miss or duplicate). Each pattern is now anchored (clause
+  end after the species, capitalized-token name slot, no bare-hyphen
+  terminator), and six idiom probes are pinned in tests.
+- *Pattern-list ordering silently dropped stated replacements*: "I left
+  Stripe. I joined Notion last week." yielded only "No longer works at
+  Stripe" — the retraction claimed the key first and Notion was lost (a
+  regression vs v0.7 on the same input). Same-key collisions now resolve
+  by **text position** (later statement = later truth), and "I left
+  Stripe, joined Notion" — rule 13's own replacement example — no longer
+  fires the retraction (comma removed from the terminator class).
+- *Two new probes couldn't fail on the failure modes they were added to
+  catch*: p33's "no longer" needle was satisfied by the *diet* fact's
+  phrasing (so a transition-phrased pet value would have passed), and
+  p35's stance words all appear in tier-C turn summaries (so reverting
+  trajectory rendering entirely would still have scored 37/37). p33's
+  needles are now pet-anchored ("no longer has"); p35 requires "earlier:",
+  which only the two-hop renderer emits.
+- *Near budget saturation, a history decoration could evict a whole fact*
+  that its bare form would have fit (the hop count is chosen from
+  `max_tokens` before greedy fitting). Decorated lines now fall back to
+  their bare form before being dropped — a "previously:" hop can never
+  cost the fact itself. This packs sections tighter: budget-sweep worst
+  ratio moved 0.87 → 0.98 (more facts per budget, same 2× contract).
+- *The README quoted v0.7-era gate numbers the cited artifact didn't
+  contain* (and `retrieval.py`'s docstring quoted a third, different
+  pair). `calibrate_gate.py` now computes and prints the per-term support
+  distributions, so the committed artifact actually contains the numbers
+  the docs quote.
+
+Gate calibration re-run on the expanded set (`calibration-v0.8.txt`):
+holistic overlap is starker than v0.7 measured — noise tops at 0.586,
+signal bottoms at 0.555; no floor separates them. Where the term-support
+rule decides, noise support tops at **0.5199 against the 0.52 floor**
+(margin 0.0001 — the thinnest in the system, quoted at full precision)
+while signal bottoms at 0.61. The ordering held across two fresh ingests,
+but that margin is why the floors stay env-tunable and "re-fit on a bigger
+probe set" stays at the top of the not-built list.
+
+**Result:** Self-eval **37/37 (1.00)**, two independent fresh ingests (all
+32 v0.7 probes unchanged and still passing — the prompt rule is additive).
+pytest 49/49. Budget sweep worst ratio 0.98 (budgets 8–2048,
+`budget-sweep-v0.8.txt`). Recall p50 6ms / p95 12–17ms.
+
+**Next:** below.
+
+---
+
 ## Where I'd go next (not built)
 
-- **Re-fit the gate floors on a bigger probe set** — 24 probes is enough to
-  catch design errors (it caught two), not enough to trust 0.62/0.50 as
-  universal constants.
+- **Re-fit the gate floors on a bigger probe set** — separation was
+  re-verified on 37 probes at v0.8 (the floors held), but 37 is still enough
+  to catch design errors, not enough to trust 0.62/0.50 as universal
+  constants.
 - **Session-scoped working memory.** Recall currently treats "recent
   conversations" as user-global. A same-session recency channel would help
   long single-session evals.
@@ -266,6 +353,6 @@ the ambiguous zone only).
   contradiction (it sees existing memories, but context windows aren't
   infallible), a write-time cosine check between the new memory and existing
   active ones under the same key prefix could flag missed supersessions.
-- **Opinion-arc rendering.** Chains are stored and `/recall` shows
-  "previously: ...", but a 3+ step arc could be summarized as an arc
-  ("warmed → frustrated → pragmatic") rather than one hop of history.
+- **Narrated opinion arcs.** v0.8 renders a 3-step arc as two inline hops;
+  a 4+ step arc could be summarized as a phrase
+  ("warmed → frustrated → pragmatic") rather than truncated at two.

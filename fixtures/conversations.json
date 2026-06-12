@@ -1,5 +1,5 @@
 {
-  "description": "Self-eval fixture: 5 scripted multi-session users exercising fact evolution, multi-hop, implicit facts, corrections, opinion arcs, preferences, and noise resistance. Ingested in order by scripts/selfeval.py.",
+  "description": "Self-eval fixture: 6 scripted multi-session users exercising fact evolution, multi-hop, implicit facts, corrections, opinion arcs, retraction, preferences, and noise resistance. Ingested in order by scripts/selfeval.py.",
   "conversations": [
     {
       "user_id": "fx-maya",
@@ -187,6 +187,40 @@
                 { "role": "assistant", "content": "Excessive re-renders from context are common — every consumer re-renders on any value change. Consider splitting contexts or memoizing the value." },
                 { "role": "user", "content": "That fixed it, thanks. I'm prepping for a system design interview at a big tech company next week, so I'll be back with more questions." },
                 { "role": "assistant", "content": "Nice work! Good luck with the interview prep — happy to run mock questions anytime." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "user_id": "fx-rosa",
+      "comment": "Retraction (cessation without replacement): pet given away, vegetarian -> pescatarian. Recall must distinguish 'no longer has' from 'never had'.",
+      "sessions": [
+        {
+          "session_id": "fx-rosa-s1",
+          "turns": [
+            {
+              "timestamp": "2025-03-02T08:30:00Z",
+              "messages": [
+                { "role": "user", "content": "I'm a nurse here in Portland and the night shifts are brutal. My cat Mochi has been keeping me company during the day at least." },
+                { "role": "assistant", "content": "Night shifts are tough — glad Mochi is helping! Anything specific I can help with?" },
+                { "role": "user", "content": "Yeah — I'm vegetarian, and I need high-protein meal prep ideas that survive a 12-hour shift." },
+                { "role": "assistant", "content": "Lentil and paneer dishes hold up well, and overnight oats with nut butter travel great." }
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "fx-rosa-s2",
+          "turns": [
+            {
+              "timestamp": "2025-05-08T19:00:00Z",
+              "messages": [
+                { "role": "user", "content": "Sad update — I had to give Mochi away last week. My new building doesn't allow pets at all." },
+                { "role": "assistant", "content": "I'm so sorry, that's really hard. Hopefully Mochi landed with a good family." },
+                { "role": "user", "content": "Also, after five years I'm not vegetarian anymore — I started eating fish last month. Pescatarian meal prep ideas welcome next time." },
+                { "role": "assistant", "content": "Noted — salmon and tinned mackerel are meal-prep workhorses, I'll keep that in mind." }
               ]
             }
           ]
@@ -397,6 +431,43 @@
       "query": "Which company pays their salary these days?",
       "user_id": "fx-maya", "session_id": "probe-x8",
       "expect_any": ["Notion"]
+    },
+    {
+      "id": "p33", "category": "retraction",
+      "query": "Does the user have any pets?",
+      "user_id": "fx-rosa", "session_id": "probe-x9",
+      "expect_any": ["no longer has", "no pets", "not have a cat", "doesn't have a cat"],
+      "expect_history_any": ["Mochi"],
+      "comment": "Cessation without replacement: current state must be the negation ('No longer has a cat'), with the old pet fact inactive in the chain — not silence (which would read as 'never had a pet') and not a stale 'has a cat'. Needles are pet-anchored ('no longer has', not bare 'no longer') so the diet fact's 'no longer vegetarian' cannot satisfy this probe, and a transition-phrased active value ('Gave the cat away') fails it"
+    },
+    {
+      "id": "p34", "category": "retraction",
+      "query": "Is the user vegetarian?",
+      "user_id": "fx-rosa", "session_id": "probe-x10",
+      "expect_any": ["no longer", "not vegetarian", "pescatarian", "fish"],
+      "expect_history_any": ["vegetarian"],
+      "expect_absent_as_current": ["Is vegetarian"],
+      "comment": "Diet retraction with partial replacement (eats fish now): old 'Is vegetarian' must not survive as an active memory"
+    },
+    {
+      "id": "p35", "category": "opinion_arc",
+      "query": "How has the user's opinion of TypeScript changed over time?",
+      "user_id": "fx-priya", "session_id": "probe-x11",
+      "expect_all": ["big team", "earlier:"],
+      "expect_any": ["mixed", "love", "frustrat", "generics"],
+      "comment": "Trajectory rendering: the settled stance plus the arc inline. 'earlier:' is emitted ONLY by the two-hop history renderer on a 3-deep chain — turn summaries can satisfy the stance words, so without this needle the probe couldn't fail if trajectory rendering were reverted (review finding)"
+    },
+    {
+      "id": "p36", "category": "noise",
+      "query": "What's the user's favorite band?",
+      "user_id": "fx-rosa", "session_id": "probe-x12",
+      "expect_empty": true
+    },
+    {
+      "id": "p37", "category": "paraphrase",
+      "query": "What does the user do for work?",
+      "user_id": "fx-rosa", "session_id": "probe-x13",
+      "expect_any": ["nurse"]
     }
   ]
 }

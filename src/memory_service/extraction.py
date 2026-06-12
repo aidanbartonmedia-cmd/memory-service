@@ -5,7 +5,10 @@ existing ACTIVE memories and returns explicit actions:
 
   create     — genuinely new knowledge
   supersede  — contradicts/updates an existing memory (supersedes_id required);
-               the old memory is kept inactive with a chain pointer
+               the old memory is kept inactive with a chain pointer. Retraction
+               ("we gave the dog away") is supersession by the negated current
+               state ("No longer has a dog") — never bare deactivation, so
+               recall can distinguish "no longer has" from "never had"
   reinforce  — restates an existing memory (bumps updated_at/confidence)
 
 Making the LLM decide supersession *with the existing memories in context* is
@@ -109,6 +112,13 @@ memories for multi-hop recall — be generous and consistent.
 a durable fact) — but DO extract it as part of turn_summary.
 12. turn_summary: ONE third-person sentence, starting "User ...", with the salient specifics \
 (names, places, topics). It is a retrieval target — include keywords.
+13. RETRACTION (cessation without replacement): when the user states a fact has CEASED and \
+nothing replaces it ("we gave Biscuit away", "I'm not vegetarian anymore", "I left Stripe" \
+with no new employer), use action="supersede" on that memory with the value phrased as the \
+negated CURRENT state ("No longer has a dog", "Is not vegetarian anymore", "Not currently \
+employed"). Never leave the stale fact active, and never phrase the value as the transition \
+event ("Gave the dog away"). When a replacement IS stated ("left Stripe, joined Notion"), \
+emit only the replacement supersession — no separate retraction.
 
 Return zero memories when the turn contains nothing durable about the user."""
 
@@ -189,6 +199,23 @@ def llm_extract(
 # ---------------- heuristic fallback ----------------
 
 _HEURISTICS: list[tuple[re.Pattern[str], MemoryType, str, str]] = [
+    # Retraction patterns. Values are negated CURRENT state, not the
+    # transition — recall must let a frozen LLM distinguish "never had" from
+    # "no longer has" (README §5). Each is anchored so it cannot fire on
+    # idioms or adjacent topics: "I don't have a dog in this fight" (no
+    # clause end after the species), "I don't have my dog with me today"
+    # ("my" excluded — that's absence, not cessation), "we gave the dog food
+    # away" (the name slot requires a capitalized token), "I'm not a
+    # vegetarian-hater" (bare hyphen is not a clause end). When a retraction
+    # and a positive pattern hit the same key in one turn, text position
+    # decides — see the collision rule in heuristic_extract.
+    (re.compile(r"\b(?:I|we) (?:no longer have|don't have|do not have) (?:a |the )?(dog|cat|bird|rabbit)\b(?:\s+any ?more|\s+now)?\s*(?:[,.!;]|$)", re.I), "fact", "pets.{0}.name", "No longer has a {0}"),
+    (re.compile(r"\b(?:I|[Ww]e) (?:had to )?(?:gave|give) (?:my|our|the) (dog|cat|bird|rabbit)(?: [A-Z]\w+)? away"), "fact", "pets.{0}.name", "No longer has a {0}"),
+    (re.compile(r"\bI(?:'m| am) (?:not|no longer) (?:a )?(vegetarian|vegan)(?: any ?more)?\s*(?:[,.!;:—–]|$)", re.I), "preference", "diet.style", "No longer {0}"),
+    # Tight terminator, no comma: "I left Stripe." retracts; "I left Stripe
+    # to join Notion" and "I left Stripe, joined Notion" must not fire (the
+    # replacement is the LLM path's job — prompt rule 13).
+    (re.compile(r"\bI (?:quit|left) (?:my job at )?([A-Z][\w&-]*(?:\.[\w&-]+)*)\s*(?:[.!]|$)"), "fact", "employment.employer", "No longer works at {0}"),
     (re.compile(r"\bI(?:'m| am)? (?:work(?:ing)? at|employed (?:at|by)) ([A-Z][\w&.-]*)"), "fact", "employment.employer", "Works at {0}"),
     (re.compile(r"\bI (?:just )?(?:started|joined) (?:at |working at )?([A-Z][\w&.-]*)"), "fact", "employment.employer", "Works at {0}"),
     (re.compile(r"\bI (?:live|stay) in ([A-Z][\w .-]*?)(?:[,.!]|$)"), "fact", "home.city", "Lives in {0}"),
@@ -223,8 +250,12 @@ def heuristic_extract(
         str(m.get("content", "")) for m in messages
     )
 
-    out: list[ExtractedMemory] = []
-    seen_keys: set[str] = set()
+    # Same-key collision rule: when two patterns hit the same key in one
+    # turn ("I left Stripe. I joined Notion." — retraction + replacement),
+    # the match that starts LATER in the user's text wins: the later
+    # statement is the later truth. Pattern-list order deciding this was a
+    # v0.8 review finding — it silently dropped stated replacements.
+    best_by_key: dict[str, tuple[int, ExtractedMemory]] = {}
     for pattern, type_, key_tpl, value_tpl in _HEURISTICS:
         m = pattern.search(user_text)
         if not m:
@@ -232,23 +263,32 @@ def heuristic_extract(
         groups = [g.strip() if g else "" for g in m.groups()]
         key = key_tpl.format(*[g.lower() for g in groups])
         value = value_tpl.format(*groups)
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
         prior = by_key.get(key)
+        # Employment retraction is the one pattern whose captured token could
+        # be anything titlecased ("I left Denver." — a city, not a job): only
+        # negate an employer we actually have on record, and only when the
+        # named thing matches it.
+        if value_tpl.startswith("No longer works at") and (
+            prior is None or groups[0].lower() not in prior["value"].lower()
+        ):
+            continue
         if prior is not None and prior["value"].strip().lower() == value.strip().lower():
-            out.append(ExtractedMemory(
+            em = ExtractedMemory(
                 action="reinforce", type=type_, key=key, value=value,
                 confidence=0.6, entities=[g.lower() for g in groups if g],
                 supersedes_id=prior["id"],
-            ))
+            )
         else:
-            out.append(ExtractedMemory(
+            em = ExtractedMemory(
                 action="supersede" if prior is not None else "create",
                 type=type_, key=key, value=value, confidence=0.6,
                 entities=[g.lower() for g in groups if g],
                 supersedes_id=prior["id"] if prior is not None else None,
-            ))
+            )
+        held = best_by_key.get(key)
+        if held is None or m.start() > held[0]:
+            best_by_key[key] = (m.start(), em)
+    out = [em for _, em in best_by_key.values()]
 
     first_user = (user_texts[0] if user_texts else user_text).strip()
     summary = f"User discussed: {first_user[:200]}" if first_user else "Turn with no user text."

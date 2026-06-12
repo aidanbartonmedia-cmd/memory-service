@@ -45,12 +45,24 @@ def turn_snippet(turn: dict[str, Any], max_chars: int = 240) -> str:
     return text[:max_chars]
 
 
-def _memory_line(mem: dict[str, Any], *, include_history: bool = True) -> str:
+_HISTORY_LABELS = ("previously", "earlier")
+
+
+def _memory_line(mem: dict[str, Any], *, history_hops: int = 1) -> str:
+    """Render a fact with up to `history_hops` of its supersession chain
+    inline: "X (updated D; previously: Y; earlier: Z)". Two hops is enough to
+    show an opinion arc's trajectory (settled stance <- middle <- origin)
+    without letting a long chain eat the budget that current facts need."""
     line = f"- {mem['value'][:300]} (updated {_date_of(mem['updated_at'])}"
-    if include_history and mem.get("supersedes"):
-        prior = store.get_memory(mem["supersedes"])
-        if prior:
-            line += f"; previously: {prior['value'][:120]}"
+    cur = mem
+    for hop in range(min(history_hops, len(_HISTORY_LABELS))):
+        if not cur.get("supersedes"):
+            break
+        prior = store.get_memory(cur["supersedes"])
+        if not prior:
+            break
+        line += f"; {_HISTORY_LABELS[hop]}: {prior['value'][:120]}"
+        cur = prior
     return line + ")"
 
 
@@ -60,8 +72,11 @@ def _event_line(mem: dict[str, Any]) -> str:
 
 _MAX_CITATIONS = 12
 # Below this budget we drop "previously: ..." decorations — history is the
-# first nicety to cut when every token competes with a current fact.
+# first nicety to cut when every token competes with a current fact. At
+# generous budgets we render a second hop ("earlier: ...") so a 3-step
+# opinion arc reads as a trajectory, not a single before/after.
 _HISTORY_MIN_BUDGET = 256
+_TRAJECTORY_MIN_BUDGET = 512
 
 
 def _mem_citation(mem: dict[str, Any], score: float) -> Citation | None:
@@ -94,7 +109,12 @@ def assemble(
     """
     mem_scores = dict(retrieved.get("memories", []))
     turn_scores = dict(retrieved.get("turns", []))
-    include_history = max_tokens >= _HISTORY_MIN_BUDGET
+    if max_tokens >= _TRAJECTORY_MIN_BUDGET:
+        history_hops = 2
+    elif max_tokens >= _HISTORY_MIN_BUDGET:
+        history_hops = 1
+    else:
+        history_hops = 0
 
     actives = store.get_memories(owner, active_only=True)
     profile = [m for m in actives if m["type"] in _TYPE_ORDER]
@@ -115,13 +135,21 @@ def assemble(
     profile.sort(key=profile_rank)
     events.sort(key=lambda m: -mem_scores.get(m["id"], 0.0))
 
-    sections: list[tuple[str, list[tuple[str, Citation | None]]]] = []
+    # Items are (line, bare_fallback, citation). The fallback is the same
+    # fact without history decorations: a "previously: ..." hop must never
+    # cost the fact itself its place in the context (review finding — near
+    # budget saturation, decorated lines could evict lower-ranked facts that
+    # their bare forms would have fit).
+    sections: list[tuple[str, list[tuple[str, str | None, Citation | None]]]] = []
 
-    profile_items = [
-        (_memory_line(mem, include_history=include_history),
-         _mem_citation(mem, mem_scores.get(mem["id"], 0.0)))
-        for mem in profile
-    ]
+    profile_items = []
+    for mem in profile:
+        line = _memory_line(mem, history_hops=history_hops)
+        bare = _memory_line(mem, history_hops=0) if history_hops else None
+        profile_items.append((
+            line, bare if bare != line else None,
+            _mem_citation(mem, mem_scores.get(mem["id"], 0.0)),
+        ))
     if profile_items:
         sections.append(("## Known facts about this user", profile_items))
 
@@ -130,20 +158,20 @@ def assemble(
     # not a dump of every event the user ever mentioned.
     scored_events = [m for m in events if mem_scores.get(m["id"], 0.0) > 0.0][:5]
     event_items = [
-        (_event_line(mem), _mem_citation(mem, mem_scores.get(mem["id"], 0.0)))
+        (_event_line(mem), None, _mem_citation(mem, mem_scores.get(mem["id"], 0.0)))
         for mem in scored_events
     ]
     if event_items:
         sections.append(("## Relevant memories", event_items))
 
-    turn_items: list[tuple[str, Citation | None]] = []
+    turn_items: list[tuple[str, str | None, Citation | None]] = []
     for turn_id, score in sorted(turn_scores.items(), key=lambda x: -x[1]):
         turn = store.get_turn(turn_id)
         if not turn:
             continue
         snippet = turn_snippet(turn)
         turn_items.append((
-            f"- [{_date_of(turn['ts'])}] {snippet}",
+            f"- [{_date_of(turn['ts'])}] {snippet}", None,
             Citation(turn_id=turn_id, score=round(score, 4), snippet=snippet[:160]),
         ))
     if turn_items:
@@ -159,9 +187,19 @@ def assemble(
             break
         section_budget = budget - header_cost
         section_lines: list[str] = []
-        for line, citation in items:
+        for line, bare, citation in items:
             cost = approx_tokens(line) + 1
             if cost > section_budget:
+                # History decorations are a nicety; the fact is not. Fall
+                # back to the undecorated line before giving up on it.
+                if bare is not None:
+                    cost = approx_tokens(bare) + 1
+                    if cost <= section_budget:
+                        section_budget -= cost
+                        section_lines.append(bare)
+                        if citation is not None:
+                            citations.append(citation)
+                        continue
                 break  # items are ranked; everything after is lower priority
             section_budget -= cost
             section_lines.append(line)
@@ -181,9 +219,10 @@ def assemble(
     # max_tokens=16 the most load-bearing known fact beats an empty context.
     if not context.strip("#\n ") and sections:
         for _header, items in sections:
-            for line, citation in items:
-                if approx_tokens(line) <= max_tokens:
-                    return line, ([citation] if citation else [])
+            for line, bare, citation in items:
+                candidate = bare if bare is not None else line
+                if approx_tokens(candidate) <= max_tokens:
+                    return candidate, ([citation] if citation else [])
             break  # only the top tier; lower tiers are lower priority
         return "", []
 

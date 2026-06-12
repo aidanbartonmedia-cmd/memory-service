@@ -48,7 +48,7 @@ when unset).
 
 One process, one container, one store. All LLM spend happens at **write
 time** (`/turns` has a 60s budget and writes are rare); **read time is
-LLM-free** (recall p50 ≈ 5ms on the self-eval fixture). The slow work
+LLM-free** (recall p50 ≈ 6ms on the self-eval fixture). The slow work
 (extraction, embedding) runs lock-free; the fast work (all SQL) applies in a
 single transaction — when `/turns` returns 201, the turn, its memories, and
 any supersession flips are all visible to `/recall` and
@@ -98,9 +98,11 @@ structured output validated against a pydantic schema) returns:
 
 What it extracts: explicit personal facts, preferences, opinions (current
 stance), time-bound events, implicit facts ("walking Biscuit this morning" →
-`pets.dog.name = Biscuit`), and in-turn corrections ("actually, not peanuts —
-shellfish") which yield *only* the corrected fact. Assistant statements and
-tool outputs are not treated as user facts unless the user confirms them.
+`pets.dog.name = Biscuit`), in-turn corrections ("actually, not peanuts —
+shellfish") which yield *only* the corrected fact, and retractions ("we had
+to give Mochi away") which supersede the fact with its negated current state
+(§5). Assistant statements and tool outputs are not treated as user facts
+unless the user confirms them.
 
 What it misses, knowingly: facts the model judges non-durable (the bug being
 debugged is summary material, not a memory); cross-turn inference chains that
@@ -141,24 +143,31 @@ models per environment.
    content terms, embedded alone, must clear 0.52 cosine against that same
    item. Frame words (favorite, plans, name, kind...) are excluded from
    evidence terms — they're why the noise item scored high holistically in
-   the first place. On the fixture this separates cleanly: noise topical
-   terms (wedding, movie, soccer) top out at 0.496 support, signal terms
-   (dinner, pay, salary, live) bottom at 0.55+. No evidence →
+   the first place. Measured on the current 37-probe fixture, where Rule B
+   actually decides: noise topical terms (wedding, movie) top out at
+   **0.5199** — quoted at full precision because that is 0.0001 under the
+   floor, the thinnest margin in the system — while signal terms bottom at
+   0.61. The ordering is right and stable across two fresh ingests, but
+   that one probe is why the floors are env-tunable and why "re-fit on a
+   bigger probe set" leads the not-built list. No evidence →
    `{"context": "", "citations": []}`, 200, never an error.
 
    The gate went through three measured designs (single floor: 0.007
    margin; global dense + any keyword: leaked via split evidence; per-item
    dense + keyword: leaked via frame-word keywords) — the failures and
    calibration data for each are in CHANGELOG v0.4/v0.7, and the committed
-   calibration artifact is `selfeval-results/calibration-v0.7.txt`,
-   reproducible via `scripts/calibrate_gate.py`. All three floors are
+   calibration artifact is `selfeval-results/calibration-v0.8.txt`
+   (re-validated on the expanded 37-probe set, where the distributions now
+   *overlap* on holistic similarity — noise tops at 0.586, signal bottoms at
+   0.555 — and only the term-support rule separates them), reproducible via
+   `scripts/calibrate_gate.py`. All three floors are
    calibrated *for bge-small-en-v1.5's similarity distribution*: change
    `MEMORY_EMBEDDING_MODEL` and you must re-run the calibration and reset
    `MEMORY_DENSE_FLOOR*` / `MEMORY_TERM_FLOOR`. Gating applies to `/recall`
    only — `/search` is an explicit tool call and stays best-effort.
 5. **Tiered assembly under the budget** (≈4 chars/token for ASCII, 1
    token/char for non-ASCII so dense scripts can't breach the bound;
-   contract allows 2×, measured usage stays ≤ 0.95×):
+   contract allows 2×, measured usage stays ≤ 0.98×):
 
    - **A. Known facts about this user** — all active facts/preferences/
      opinions, ordered fact→preference→opinion, then query-relevance, then
@@ -169,8 +178,10 @@ models per environment.
 
    Priority under pressure = exactly that order (the spec's order). Cuts are
    whole-line, bottom-up within a tier; a tier header is only emitted if at
-   least one line fits; "previously: …" history decorations are the first
-   nicety dropped (budgets < 256); below header-sized budgets the single
+   least one line fits; history decorations scale with the budget — two hops
+   of chain ("previously: …; earlier: …") at budgets ≥ 512 so an opinion arc
+   reads as a trajectory, one hop in [256, 512), none below 256, where every
+   token competes with a current fact. Below header-sized budgets the single
    top-priority fact is emitted bare. At `max_tokens=16` you get the most
    load-bearing known fact and nothing else.
 
@@ -203,17 +214,29 @@ this; it always resolves to exactly one owner scope.
 - **Storage**: supersession writes a doubly-linked chain — old row keeps
   `superseded_by`, new row keeps `supersedes`, old row flips `active=0`,
   nothing is deleted. `/users/{id}/memories` exposes the full chain.
-- **Recall** renders only active facts, with one hop of history inline:
-  `Works at Notion as a product manager (updated 2025-04-05; previously:
-  Works at Stripe as a backend engineer)`.
+- **Recall** renders only active facts, with the chain inline, budget
+  permitting: `Works at Notion as a product manager (updated 2025-04-05;
+  previously: Works at Stripe as a backend engineer)`.
 - **Corrections** inside a turn never materialize the wrong fact; corrections
   of an earlier turn supersede it.
+- **Retraction** (cessation without replacement): "we had to give Mochi
+  away" supersedes `pets.cat.name` with the negated current state — `No
+  longer has a cat (previously: Has a cat named Mochi)` — never a bare
+  `active=0` flip. Deliberate: recall context goes to a frozen LLM, and only
+  an explicit negation lets it distinguish "no longer has a cat" from "never
+  had one" (silence reads as the latter) — while a stale positive fact would
+  be worse than either. The heuristic fallback handles pattern-shaped
+  retractions too ("not vegetarian anymore"), with one asymmetric guard: it
+  only negates an employer it can match against the recorded one ("I left
+  Denver." must not retract a job at Stripe).
 - **Opinion arcs** are modeled as supersession chains over `opinions.*` keys
   where each value is the *current nuanced stance*, not a delta: "loves
   TypeScript" → superseded by → "TypeScript is right for big team projects,
   Python for scripts". The arc is preserved and inspectable; recall leads
-  with the settled stance. Partial by design: a 3+ step arc renders one hop
-  of history inline rather than a narrated trajectory (CHANGELOG: next).
+  with the settled stance and, at budgets ≥ 512, renders the trajectory
+  inline ("previously: mixed feelings about TypeScript…; earlier: Loves
+  TypeScript") — two hops, capped so a long chain can't crowd out current
+  facts.
 - **Reinforcement**: restating an existing fact bumps `updated_at`/confidence
   instead of creating a duplicate.
 - **Cleanup repair**: `DELETE /sessions/{id}` removes that session's memories
@@ -233,17 +256,29 @@ this; it always resolves to exactly one owner scope.
   rule-based path (that's why the fallback exists *and* why it's the
   fallback). Cost: nondeterminism — mitigated by schema-validated output,
   state-phrasing rules, and independent full-ingest stability runs (32/32
-  twice at v0.7).
+  twice at v0.7, 37/37 twice at v0.8).
 - **SQLite over a vector DB**: transactional supersession + read-after-write
   beats ANN performance we don't need at this scale (§2).
 - **Brute-force cosine** is O(n) per query — correct until ~10⁵ memories per
   user, which a conversational agent won't hit; the seam to swap is one module.
+- **No cross-encoder reranker.** The standard third stage after hybrid+RRF is
+  a rerank model, and it's deliberately absent. A reranker buys *ordering*
+  precision inside the candidate set; this eval punishes a different failure
+  — *admitting* an irrelevant candidate at all (noise injection) — and that
+  is the gate's job, which it does from already-computed similarities in
+  ~0ms. At this corpus size the RRF ordering is already clean (37/37 without
+  a reranker; recall p50 ≈ 6ms, and a cross-encoder would multiply that by
+  ~10× and add ~90MB to the image). If the corpus grew to where RRF ordering
+  got noisy, the seam is the same one as for ANN: `retrieval.py` returns
+  scored candidates, so a reranker is a one-module insert between fusion and
+  the gate — a stage to add when there's measured ordering error, not before.
 - **Conservative noise gate**: I tuned to prefer empty context over plausible
   junk, because a frozen LLM treats injected context as true — false context
   is worse than no context. The margins are honest-but-thin (calibrated on 24
-  probes); floors are env-tunable and the calibration method is in the repo.
+  probes at v0.4; separation re-verified on the 37-probe set at v0.8);
+  floors are env-tunable and the calibration method is in the repo.
 - **chars/4 token approximation**: dependency-free and within the contract's
-  2× tolerance (measured ≤ 0.95×, with non-ASCII characters charged a full
+  2× tolerance (measured ≤ 0.98×, with non-ASCII characters charged a full
   token each so CJK text can't silently breach the bound); exact
   tokenization would add a tokenizer dependency to save tokens nobody is
   losing.
@@ -270,12 +305,12 @@ this; it always resolves to exactly one owner scope.
 # recall-quality test reports its X-of-Y metric and asserts a degraded-mode
 # floor):
 python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest tests/ -q          # 38 tests, ~2s
+.venv/bin/python -m pytest tests/ -q          # 49 tests, ~2s
 
 # Full recall-quality self-eval (the iteration loop; uses the LLM
 # extractor, needs ANTHROPIC_API_KEY in the service environment):
 docker compose up -d
-.venv/bin/python scripts/selfeval.py          # ingests fixtures/, runs 32 probes
+.venv/bin/python scripts/selfeval.py          # ingests fixtures/, runs 37 probes
 
 # Gate calibration + budget compliance (committed artifacts in
 # selfeval-results/):
@@ -285,12 +320,12 @@ PYTHONPATH=src .venv/bin/python scripts/calibrate_gate.py
 
 `scripts/selfeval.py` prints per-category pass rates and writes a JSON report
 to `selfeval-results/` — the numbers quoted in `CHANGELOG.md` are those
-files, committed in this repo. Current state: **32/32** (fact evolution,
-multi-hop, corrections, opinion arc, implicit facts, 8 noise probes
-including cross-user stress cases, paraphrase, keyword, cold-session),
-stable across two independent fresh ingests at v0.7, recall p50 ≈ 5ms,
-budget usage ≤ 0.95× at every budget from 8 to 2048 tokens
-(`selfeval-results/budget-sweep-v0.7.txt`).
+files, committed in this repo. Current state: **37/37** (fact evolution,
+multi-hop, corrections, opinion arc incl. trajectory rendering, retraction,
+implicit facts, 9 noise probes including cross-user stress cases,
+paraphrase, keyword, cold-session), stable across two independent fresh
+ingests at v0.8, recall p50 ≈ 6ms, budget usage ≤ 0.98× at every budget
+from 8 to 2048 tokens (`selfeval-results/budget-sweep-v0.8.txt`).
 
 ---
 
@@ -342,7 +377,7 @@ src/memory_service/
   models.py      lenient-in / exact-out pydantic shapes
   config.py      env knobs (all defaulted)
 tests/           contract, robustness, persistence, scoping, auth
-fixtures/        5 scripted conversations + 32 probes (the self-eval set)
+fixtures/        6 scripted conversations + 37 probes (the self-eval set)
 scripts/selfeval.py        the measurement loop behind every CHANGELOG entry
 scripts/calibrate_gate.py  re-fit the gate floors (run after changing models)
 scripts/budget_sweep.py    verify max_tokens compliance across budgets
